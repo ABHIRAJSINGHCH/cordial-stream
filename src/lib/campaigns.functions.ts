@@ -323,7 +323,11 @@ export const updateMessageStatus = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ context, data }) => {
-    const patch: { status: string; scheduled_at?: string; sent_at?: string } = { status: data.status };
+    const patch: {
+      status: "approved" | "scheduled" | "sent" | "skipped";
+      scheduled_at?: string;
+      sent_at?: string;
+    } = { status: data.status };
     if (data.status === "scheduled") patch.scheduled_at = new Date(Date.now() + 60_000).toISOString();
     if (data.status === "sent") patch.sent_at = new Date().toISOString();
     const { error } = await context.supabase.from("messages").update(patch).eq("id", data.id);
