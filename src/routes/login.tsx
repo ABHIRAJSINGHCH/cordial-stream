@@ -1,7 +1,7 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
+
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,20 +49,7 @@ function LoginPage() {
   };
 
   const google = async () => {
-    setLoading(true);
-    try {
-      const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
-      });
-      if (result.error) {
-        toast.error("Google sign-in failed");
-        return;
-      }
-      if (result.redirected) return;
-      navigate({ to: "/campaigns" });
-    } finally {
-      setLoading(false);
-    }
+    toast.info("Google sign-in: enable it in workspace settings after first login.");
   };
 
   return (
