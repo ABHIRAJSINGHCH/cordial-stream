@@ -50,45 +50,44 @@
 
 :root {
   --radius: 0.5rem;
-  /* hsl(0 0% 98%) */
-  --background: oklch(0.985 0 0);
-  /* hsl(0 0% 9%) */
+  /* Slightly darker page so white surfaces (sidebar, cards, dialogs) clearly float */
+  --background: oklch(0.965 0 0);
   --foreground: oklch(0.205 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.205 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.205 0 0);
-  /* Foreground-as-primary so primary buttons read as ink-on-paper */
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
+  --secondary: oklch(0.955 0 0);
   --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  /* hsl(0 0% 45%) */
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
+  --muted: oklch(0.955 0 0);
+  --muted-foreground: oklch(0.5 0 0);
+  --accent: oklch(0.955 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.58 0.22 27);
   --destructive-foreground: oklch(0.985 0 0);
-  /* hsl(0 0% 0% / 0.08) */
-  --border: oklch(0.205 0 0 / 0.08);
-  --input: oklch(0.205 0 0 / 0.08);
+  --border: oklch(0.205 0 0 / 0.1);
+  --input: oklch(0.205 0 0 / 0.12);
   --ring: oklch(0.55 0.2 252);
-  --surface: oklch(0.985 0 0 / 0.5);
+  --surface: oklch(1 0 0);
   --surface-foreground: oklch(0.205 0 0);
-  /* AI blue accent: hsl(212 100% 48%) */
   --ai: oklch(0.55 0.2 252);
   --ai-foreground: oklch(0.985 0 0);
-  --ai-soft: oklch(0.55 0.2 252 / 0.08);
+  --ai-soft: oklch(0.55 0.2 252 / 0.1);
 
   --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0.205 0 0);
   --sidebar-primary: oklch(0.205 0 0);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent: oklch(0.955 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.205 0 0 / 0.08);
   --sidebar-ring: oklch(0.55 0.2 252);
+
+  --shadow-elevation-1: 0 1px 2px oklch(0 0 0 / 0.04), 0 1px 3px oklch(0 0 0 / 0.06);
+  --shadow-elevation-2: 0 4px 8px -2px oklch(0 0 0 / 0.08), 0 2px 4px -1px oklch(0 0 0 / 0.06);
+  --shadow-elevation-3: 0 20px 40px -12px oklch(0 0 0 / 0.18), 0 8px 16px -6px oklch(0 0 0 / 0.1);
 }
 
 .dark {

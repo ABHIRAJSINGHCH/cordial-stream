@@ -49,14 +49,41 @@ export const createCampaign = createServerFn({ method: "POST" })
         name: z.string().min(1).max(120),
         goal: z.string().max(500).optional(),
         default_tone: ToneEnum.default("professional"),
+        sender_name: z.string().max(120).optional(),
+        sender_email: z.string().email().optional().or(z.literal("")),
+        signature: z.string().max(500).optional(),
+        cta_url: z.string().url().optional().or(z.literal("")),
+        mailbox_id: z.string().uuid().optional(),
+        audience_brief: z
+          .object({
+            industry: z.string().max(120).optional(),
+            company_size: z.string().max(120).optional(),
+            target_role: z.string().max(120).optional(),
+            geography: z.string().max(120).optional(),
+            pain_point: z.string().max(500).optional(),
+          })
+          .optional(),
       })
       .parse(input),
   )
   .handler(async ({ context, data }) => {
     const { supabase, userId } = context;
+    const insertable = {
+      workspace_id: data.workspace_id,
+      name: data.name,
+      goal: data.goal,
+      default_tone: data.default_tone,
+      sender_name: data.sender_name || null,
+      sender_email: data.sender_email || null,
+      signature: data.signature || null,
+      cta_url: data.cta_url || null,
+      mailbox_id: data.mailbox_id || null,
+      audience_brief: data.audience_brief ?? null,
+      created_by: userId,
+    };
     const { data: campaign, error } = await supabase
       .from("campaigns")
-      .insert({ ...data, created_by: userId })
+      .insert(insertable)
       .select()
       .single();
     if (error || !campaign) throw new Error(error?.message ?? "Failed to create campaign");
