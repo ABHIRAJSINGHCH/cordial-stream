@@ -6,7 +6,7 @@ import { ensureWorkspace } from "@/lib/workspace.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { Inbox, Layers, Users, BarChart3, Settings, Menu, LogOut, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated")({
@@ -59,11 +59,9 @@ function AuthenticatedLayout() {
 
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
         <header className="md:hidden h-12 border-b border-border flex items-center px-3 gap-2 shrink-0">
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)}>
-              <Menu className="size-4" />
-            </Button>
-          </SheetTrigger>
+          <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)}>
+            <Menu className="size-4" />
+          </Button>
           <span className="font-semibold text-sm tracking-tight">KINETIC OS</span>
         </header>
         <Outlet />
