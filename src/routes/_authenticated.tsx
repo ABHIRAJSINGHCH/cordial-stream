@@ -22,6 +22,7 @@ const NAV = [
   { to: "/campaigns", label: "Campaigns", icon: Layers },
   { to: "/leads", label: "Lead Engine", icon: Users },
   { to: "/inbox", label: "Inbox", icon: Inbox },
+  { to: "/ai-engine", label: "AI Engine", icon: Sparkles },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
@@ -46,7 +47,10 @@ function AuthenticatedLayout() {
   return (
     <div className="flex h-screen w-full bg-background text-foreground overflow-hidden">
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-60 border-r border-border flex-col bg-sidebar shrink-0">
+      <aside
+        className="hidden md:flex w-60 border-r border-sidebar-border flex-col bg-sidebar shrink-0"
+        style={{ boxShadow: "var(--shadow-elevation-1)" }}
+      >
         <SidebarBody workspaceName={workspace?.name ?? "Workspace"} />
       </aside>
 
@@ -114,16 +118,25 @@ function SidebarBody({ workspaceName, onNav }: { workspaceName: string; onNav?: 
         })}
 
         <div className="px-3 pt-4 pb-1.5 font-mono text-[10px] text-muted-foreground uppercase tracking-widest">
+          Intelligence
+        </div>
+        <Link
+          to="/ai-engine"
+          onClick={onNav}
+          className={cn(
+            "flex items-center gap-2.5 px-3 py-2 text-sm rounded-md transition-colors",
+            pathname.startsWith("/ai-engine")
+              ? "bg-sidebar-accent text-foreground font-medium"
+              : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent",
+          )}
+        >
+          <Sparkles className="size-4 shrink-0 text-ai" />
           AI Engine
-        </div>
-        <div className="px-3 py-2 flex items-center gap-2.5 text-sm text-muted-foreground">
-          <Sparkles className="size-4 text-ai" />
-          Personalization
-          <span className="ml-auto font-mono text-[10px] text-emerald-600">live</span>
-        </div>
+          <span className="ml-auto font-mono text-[9px] text-emerald-600">live</span>
+        </Link>
       </nav>
 
-      <div className="p-3 border-t border-border">
+      <div className="p-3 border-t border-sidebar-border">
         <button
           onClick={signOut}
           className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground rounded-md hover:bg-sidebar-accent"
