@@ -112,34 +112,52 @@ export type Database = {
       }
       campaigns: {
         Row: {
+          audience_brief: Json | null
           created_at: string
           created_by: string | null
+          cta_url: string | null
           default_tone: Database["public"]["Enums"]["message_tone"]
           goal: string | null
           id: string
+          mailbox_id: string | null
           name: string
+          sender_email: string | null
+          sender_name: string | null
+          signature: string | null
           status: Database["public"]["Enums"]["campaign_status"]
           updated_at: string
           workspace_id: string
         }
         Insert: {
+          audience_brief?: Json | null
           created_at?: string
           created_by?: string | null
+          cta_url?: string | null
           default_tone?: Database["public"]["Enums"]["message_tone"]
           goal?: string | null
           id?: string
+          mailbox_id?: string | null
           name: string
+          sender_email?: string | null
+          sender_name?: string | null
+          signature?: string | null
           status?: Database["public"]["Enums"]["campaign_status"]
           updated_at?: string
           workspace_id: string
         }
         Update: {
+          audience_brief?: Json | null
           created_at?: string
           created_by?: string | null
+          cta_url?: string | null
           default_tone?: Database["public"]["Enums"]["message_tone"]
           goal?: string | null
           id?: string
+          mailbox_id?: string | null
           name?: string
+          sender_email?: string | null
+          sender_name?: string | null
+          signature?: string | null
           status?: Database["public"]["Enums"]["campaign_status"]
           updated_at?: string
           workspace_id?: string
@@ -263,6 +281,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      mailboxes: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          display_name: string | null
+          email: string
+          id: string
+          metadata: Json | null
+          provider: string
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          display_name?: string | null
+          email: string
+          id?: string
+          metadata?: Json | null
+          provider: string
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          display_name?: string | null
+          email?: string
+          id?: string
+          metadata?: Json | null
+          provider?: string
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: []
       }
       message_events: {
         Row: {
