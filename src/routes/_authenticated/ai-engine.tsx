@@ -17,7 +17,7 @@ function AiEnginePage() {
     queryFn: () => fn(),
   });
 
-  const success = jobs.filter((j) => j.status === "completed").length;
+  const success = jobs.filter((j) => j.status === "done").length;
   const failed = jobs.filter((j) => j.status === "failed").length;
   const running = jobs.filter((j) => j.status === "running" || j.status === "pending").length;
 
@@ -173,7 +173,7 @@ function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; va
 
 function JobStatus({ status }: { status: string }) {
   const map: Record<string, string> = {
-    completed: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20",
+    done: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20",
     failed: "bg-destructive/10 text-destructive border-destructive/20",
     running: "bg-ai-soft text-ai border-ai/20",
     pending: "bg-amber-500/10 text-amber-700 border-amber-500/20",
