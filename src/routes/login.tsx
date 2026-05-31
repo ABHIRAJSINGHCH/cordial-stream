@@ -1,6 +1,7 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable";
 
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -23,10 +24,12 @@ function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     try {
       if (mode === "signup") {
         const { error } = await supabase.auth.signUp({
@@ -42,43 +45,60 @@ function LoginPage() {
         navigate({ to: "/campaigns" });
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Auth failed");
+      const msg = err instanceof Error ? err.message : "Auth failed";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
   };
 
   const google = async () => {
-    toast.info("Google sign-in: enable it in workspace settings after first login.");
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
+      });
+      if (result.error) throw result.error;
+      if (result.redirected) return;
+      navigate({ to: "/campaigns" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Google sign-in failed";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
+    <div className="grid min-h-screen lg:grid-cols-2 bg-background">
       {/* Left: form */}
-      <div className="flex items-center justify-center p-8">
-        <div className="w-full max-w-sm space-y-8 animate-in-up">
+      <div className="flex items-center justify-center p-6 sm:p-10">
+        <div className="w-full max-w-sm space-y-10 animate-in-up">
           <div className="flex items-center gap-3">
-            <div className="size-7 rounded bg-foreground grid place-items-center">
+            <div className="size-8 rounded-md bg-foreground grid place-items-center">
               <div className="size-2 rounded-full bg-background" />
             </div>
             <span className="font-semibold tracking-tight text-sm">KINETIC OS</span>
           </div>
 
-          <div className="space-y-2">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {mode === "signin" ? "Sign in" : "Create your workspace"}
+          <div className="space-y-3">
+            <h1 className="text-3xl font-semibold tracking-tight leading-tight">
+              {mode === "signin" ? "Welcome back" : "Create your workspace"}
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground leading-relaxed">
               {mode === "signin"
-                ? "Continue building your outreach operations."
-                : "Get started in under a minute."}
+                ? "Sign in to continue running your outreach operations."
+                : "Start in under a minute. No credit card required."}
             </p>
           </div>
 
           <Button
             type="button"
             variant="outline"
-            className="w-full h-10 font-medium"
+            className="w-full h-11 font-medium"
             onClick={google}
             disabled={loading}
           >
@@ -91,11 +111,11 @@ function LoginPage() {
               <span className="w-full border-t border-border" />
             </div>
             <div className="relative flex justify-center text-[10px] uppercase tracking-widest font-mono">
-              <span className="bg-background px-2 text-muted-foreground">Or</span>
+              <span className="bg-background px-3 text-muted-foreground">Or with email</span>
             </div>
           </div>
 
-          <form onSubmit={submit} className="space-y-4">
+          <form onSubmit={submit} className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -105,6 +125,8 @@ function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoComplete="email"
+                className="h-11"
+                placeholder="you@company.com"
               />
             </div>
             <div className="space-y-2">
@@ -117,19 +139,33 @@ function LoginPage() {
                 required
                 minLength={8}
                 autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                className="h-11"
+                placeholder={mode === "signup" ? "Minimum 8 characters" : "••••••••"}
               />
             </div>
-            <Button type="submit" className="w-full h-10" disabled={loading}>
-              {mode === "signin" ? "Sign in" : "Create account"}
+            {error && (
+              <div className="text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-3 py-2">
+                {error}
+              </div>
+            )}
+            <Button type="submit" className="w-full h-11" disabled={loading}>
+              {loading
+                ? "Please wait…"
+                : mode === "signin"
+                  ? "Sign in"
+                  : "Create account"}
             </Button>
           </form>
 
-          <p className="text-xs text-muted-foreground">
-            {mode === "signin" ? "New here?" : "Already have an account?"}{" "}
+          <p className="text-xs text-muted-foreground text-center leading-relaxed">
+            {mode === "signin" ? "New to Kinetic OS?" : "Already have an account?"}{" "}
             <button
               type="button"
-              className="underline underline-offset-4 hover:text-foreground"
-              onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
+              className="font-medium text-foreground underline underline-offset-4 hover:text-ai"
+              onClick={() => {
+                setMode(mode === "signin" ? "signup" : "signin");
+                setError(null);
+              }}
             >
               {mode === "signin" ? "Create an account" : "Sign in"}
             </button>
@@ -143,8 +179,8 @@ function LoginPage() {
           <span className="size-1.5 rounded-full bg-emerald-400" />
           system_online
         </div>
-        <div className="space-y-6 max-w-md">
-          <h2 className="text-3xl font-semibold tracking-tight text-balance">
+        <div className="space-y-8 max-w-md">
+          <h2 className="text-4xl font-semibold tracking-tight leading-[1.1] text-balance">
             The outreach operating system for serious operators.
           </h2>
           <p className="text-sm text-background/60 leading-relaxed">

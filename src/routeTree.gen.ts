@@ -17,6 +17,7 @@ import { Route as AuthenticatedLeadsRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedInboxRouteImport } from './routes/_authenticated/inbox'
 import { Route as AuthenticatedCampaignsRouteImport } from './routes/_authenticated/campaigns'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
+import { Route as AuthenticatedAiEngineRouteImport } from './routes/_authenticated/ai-engine'
 import { Route as AuthenticatedCampaignsIdRouteImport } from './routes/_authenticated/campaigns.$id'
 
 const LoginRoute = LoginRouteImport.update({
@@ -58,6 +59,11 @@ const AuthenticatedAnalyticsRoute = AuthenticatedAnalyticsRouteImport.update({
   path: '/analytics',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedAiEngineRoute = AuthenticatedAiEngineRouteImport.update({
+  id: '/ai-engine',
+  path: '/ai-engine',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedCampaignsIdRoute =
   AuthenticatedCampaignsIdRouteImport.update({
     id: '/$id',
@@ -68,6 +74,7 @@ const AuthenticatedCampaignsIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/ai-engine': typeof AuthenticatedAiEngineRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/campaigns': typeof AuthenticatedCampaignsRouteWithChildren
   '/inbox': typeof AuthenticatedInboxRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/ai-engine': typeof AuthenticatedAiEngineRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/campaigns': typeof AuthenticatedCampaignsRouteWithChildren
   '/inbox': typeof AuthenticatedInboxRoute
@@ -90,6 +98,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/login': typeof LoginRoute
+  '/_authenticated/ai-engine': typeof AuthenticatedAiEngineRoute
   '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
   '/_authenticated/campaigns': typeof AuthenticatedCampaignsRouteWithChildren
   '/_authenticated/inbox': typeof AuthenticatedInboxRoute
@@ -102,6 +111,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/ai-engine'
     | '/analytics'
     | '/campaigns'
     | '/inbox'
@@ -112,6 +122,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/ai-engine'
     | '/analytics'
     | '/campaigns'
     | '/inbox'
@@ -123,6 +134,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/login'
+    | '/_authenticated/ai-engine'
     | '/_authenticated/analytics'
     | '/_authenticated/campaigns'
     | '/_authenticated/inbox'
@@ -195,6 +207,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAnalyticsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/ai-engine': {
+      id: '/_authenticated/ai-engine'
+      path: '/ai-engine'
+      fullPath: '/ai-engine'
+      preLoaderRoute: typeof AuthenticatedAiEngineRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/campaigns/$id': {
       id: '/_authenticated/campaigns/$id'
       path: '/$id'
@@ -220,6 +239,7 @@ const AuthenticatedCampaignsRouteWithChildren =
   )
 
 interface AuthenticatedRouteChildren {
+  AuthenticatedAiEngineRoute: typeof AuthenticatedAiEngineRoute
   AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
   AuthenticatedCampaignsRoute: typeof AuthenticatedCampaignsRouteWithChildren
   AuthenticatedInboxRoute: typeof AuthenticatedInboxRoute
@@ -228,6 +248,7 @@ interface AuthenticatedRouteChildren {
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedAiEngineRoute: AuthenticatedAiEngineRoute,
   AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
   AuthenticatedCampaignsRoute: AuthenticatedCampaignsRouteWithChildren,
   AuthenticatedInboxRoute: AuthenticatedInboxRoute,
@@ -247,3 +268,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
