@@ -13,7 +13,7 @@ export const Route = createFileRoute("/login")({
   beforeLoad: async () => {
     if (typeof window === "undefined") return;
     const { data } = await supabase.auth.getSession();
-    if (data.session) throw redirect({ to: "/campaigns" });
+    if (data.session) throw redirect({ to: "/dashboard" });
   },
   component: LoginPage,
 });
@@ -42,7 +42,7 @@ function LoginPage() {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate({ to: "/campaigns" });
+        navigate({ to: "/dashboard" });
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Auth failed";
@@ -62,7 +62,7 @@ function LoginPage() {
       });
       if (result.error) throw result.error;
       if (result.redirected) return;
-      navigate({ to: "/campaigns" });
+      navigate({ to: "/dashboard" });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Google sign-in failed";
       setError(msg);
