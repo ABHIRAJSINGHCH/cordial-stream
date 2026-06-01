@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listCampaigns } from "@/lib/campaigns.functions";
 import { listLeads } from "@/lib/leads.functions";
-import { getAnalyticsOverview } from "@/lib/analytics.functions";
+import { getWorkspaceAnalytics } from "@/lib/analytics.functions";
 import { Layers, Users, Send, MessageSquare, ArrowUpRight, Sparkles, Plug } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -14,7 +14,7 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 function DashboardPage() {
   const fetchCampaigns = useServerFn(listCampaigns);
   const fetchLeads = useServerFn(listLeads);
-  const fetchAnalytics = useServerFn(getAnalyticsOverview);
+  const fetchAnalytics = useServerFn(getWorkspaceAnalytics);
 
   const campaigns = useQuery({ queryKey: ["campaigns"], queryFn: () => fetchCampaigns() });
   const leads = useQuery({ queryKey: ["leads"], queryFn: () => fetchLeads() });
@@ -26,8 +26,8 @@ function DashboardPage() {
   const campaignCount = campaigns.data?.length ?? 0;
   const activeCampaignCount = campaigns.data?.filter((c) => c.status === "active").length ?? 0;
   const leadCount = leads.data?.length ?? 0;
-  const sent = analytics.data?.totals?.sent ?? 0;
-  const replies = analytics.data?.totals?.replies ?? 0;
+  const sent = analytics.data?.kpis?.sent ?? 0;
+  const replies = analytics.data?.kpis?.replied ?? 0;
   const replyRate = sent > 0 ? ((replies / sent) * 100).toFixed(1) : "0.0";
 
   const stats = [
