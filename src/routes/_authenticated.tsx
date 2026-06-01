@@ -47,7 +47,7 @@ export const Route = createFileRoute("/_authenticated")({
 });
 
 const PRIMARY_NAV = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/campaigns", label: "Campaigns", icon: Layers },
   { to: "/leads", label: "Leads", icon: Users },
   { to: "/inbox", label: "Inbox", icon: Inbox },
@@ -232,7 +232,7 @@ function SidebarBody({
               to={n.to}
               label={n.label}
               Icon={n.icon}
-              active={isActive(n.to, "exact" in n ? n.exact : false)}
+              active={isActive(n.to)}
               collapsed={collapsed}
               onNav={onNav}
             />

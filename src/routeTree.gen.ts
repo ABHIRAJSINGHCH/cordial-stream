@@ -14,7 +14,9 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedLeadsRouteImport } from './routes/_authenticated/leads'
+import { Route as AuthenticatedIntegrationsRouteImport } from './routes/_authenticated/integrations'
 import { Route as AuthenticatedInboxRouteImport } from './routes/_authenticated/inbox'
+import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCampaignsRouteImport } from './routes/_authenticated/campaigns'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
 import { Route as AuthenticatedAiEngineRouteImport } from './routes/_authenticated/ai-engine'
@@ -44,9 +46,20 @@ const AuthenticatedLeadsRoute = AuthenticatedLeadsRouteImport.update({
   path: '/leads',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedIntegrationsRoute =
+  AuthenticatedIntegrationsRouteImport.update({
+    id: '/integrations',
+    path: '/integrations',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedInboxRoute = AuthenticatedInboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedCampaignsRoute = AuthenticatedCampaignsRouteImport.update({
@@ -77,7 +90,9 @@ export interface FileRoutesByFullPath {
   '/ai-engine': typeof AuthenticatedAiEngineRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/campaigns': typeof AuthenticatedCampaignsRouteWithChildren
+  '/dashboard': typeof AuthenticatedDashboardRoute
   '/inbox': typeof AuthenticatedInboxRoute
+  '/integrations': typeof AuthenticatedIntegrationsRoute
   '/leads': typeof AuthenticatedLeadsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/campaigns/$id': typeof AuthenticatedCampaignsIdRoute
@@ -88,7 +103,9 @@ export interface FileRoutesByTo {
   '/ai-engine': typeof AuthenticatedAiEngineRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/campaigns': typeof AuthenticatedCampaignsRouteWithChildren
+  '/dashboard': typeof AuthenticatedDashboardRoute
   '/inbox': typeof AuthenticatedInboxRoute
+  '/integrations': typeof AuthenticatedIntegrationsRoute
   '/leads': typeof AuthenticatedLeadsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/campaigns/$id': typeof AuthenticatedCampaignsIdRoute
@@ -101,7 +118,9 @@ export interface FileRoutesById {
   '/_authenticated/ai-engine': typeof AuthenticatedAiEngineRoute
   '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
   '/_authenticated/campaigns': typeof AuthenticatedCampaignsRouteWithChildren
+  '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/inbox': typeof AuthenticatedInboxRoute
+  '/_authenticated/integrations': typeof AuthenticatedIntegrationsRoute
   '/_authenticated/leads': typeof AuthenticatedLeadsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/campaigns/$id': typeof AuthenticatedCampaignsIdRoute
@@ -114,7 +133,9 @@ export interface FileRouteTypes {
     | '/ai-engine'
     | '/analytics'
     | '/campaigns'
+    | '/dashboard'
     | '/inbox'
+    | '/integrations'
     | '/leads'
     | '/settings'
     | '/campaigns/$id'
@@ -125,7 +146,9 @@ export interface FileRouteTypes {
     | '/ai-engine'
     | '/analytics'
     | '/campaigns'
+    | '/dashboard'
     | '/inbox'
+    | '/integrations'
     | '/leads'
     | '/settings'
     | '/campaigns/$id'
@@ -137,7 +160,9 @@ export interface FileRouteTypes {
     | '/_authenticated/ai-engine'
     | '/_authenticated/analytics'
     | '/_authenticated/campaigns'
+    | '/_authenticated/dashboard'
     | '/_authenticated/inbox'
+    | '/_authenticated/integrations'
     | '/_authenticated/leads'
     | '/_authenticated/settings'
     | '/_authenticated/campaigns/$id'
@@ -186,11 +211,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedLeadsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/integrations': {
+      id: '/_authenticated/integrations'
+      path: '/integrations'
+      fullPath: '/integrations'
+      preLoaderRoute: typeof AuthenticatedIntegrationsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/inbox': {
       id: '/_authenticated/inbox'
       path: '/inbox'
       fullPath: '/inbox'
       preLoaderRoute: typeof AuthenticatedInboxRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/dashboard': {
+      id: '/_authenticated/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/campaigns': {
@@ -242,7 +281,9 @@ interface AuthenticatedRouteChildren {
   AuthenticatedAiEngineRoute: typeof AuthenticatedAiEngineRoute
   AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
   AuthenticatedCampaignsRoute: typeof AuthenticatedCampaignsRouteWithChildren
+  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedInboxRoute: typeof AuthenticatedInboxRoute
+  AuthenticatedIntegrationsRoute: typeof AuthenticatedIntegrationsRoute
   AuthenticatedLeadsRoute: typeof AuthenticatedLeadsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
 }
@@ -251,7 +292,9 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAiEngineRoute: AuthenticatedAiEngineRoute,
   AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
   AuthenticatedCampaignsRoute: AuthenticatedCampaignsRouteWithChildren,
+  AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedInboxRoute: AuthenticatedInboxRoute,
+  AuthenticatedIntegrationsRoute: AuthenticatedIntegrationsRoute,
   AuthenticatedLeadsRoute: AuthenticatedLeadsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
 }
@@ -268,3 +311,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
