@@ -1,88 +1,58 @@
-## Problems found
+# Plan — Overlay polish + email sending pipeline
 
-1. **Sidebar bleeds into content** — `--sidebar` and `--background` are both near-white (`oklch(1)` vs `oklch(0.985)`), so the right border is the only separator. Same issue in dark mode is subtle.
-2. **Dialog overlay washes out** — popover/dialog uses pure white on a near-white page with a weak backdrop; the modal looks merged with the page.
-3. **Campaign creation is too thin** — only `name` + `goal`. Cannot actually drive research or sending (no audience definition, no sender identity, no channel choice, no value prop / CTA).
-4. **No email-sending integration** — nothing connects to Gmail or Outlook, so "send" can't really run.
-5. **Analytics route is a placeholder** — no charts, no metrics.
-6. **AI Engine sidebar item is dead** — it's a static `<div>`, not a link, with no destination route.
-7. **Login spacing/polish** — cramped, no visible hierarchy on small screens, no link separation.
+## 1. Fix remaining overlay / surface visibility
 
-## Plan
+Symptom: dialog and sheet content still feels washed-out and bleeds into the page; sidebar edge is unclear on the 677px viewport.
 
-### 1. Design tokens — fix contrast (`src/styles.css`)
-- Page background → a touch warmer/darker (`oklch(0.97 0 0)`) so white sidebar/cards visibly float.
-- Sidebar stays pure white in light, slightly lifted in dark.
-- Strengthen dialog overlay (darker, blurred) by overriding overlay class in `dialog.tsx`.
-- Add `--elevation-1` shadow token for cards/dialogs.
+- `src/components/ui/dialog.tsx`
+  - Bump overlay to `bg-black/70` and add explicit `supports-[backdrop-filter]:bg-black/55` fallback.
+  - Force the content surface opaque: `bg-popover` → add `!bg-popover` + `border-2 border-border/80` and keep `shadow-elevation-3`.
+  - Wrap children in `<div className="relative isolate">` so internal cards don't inherit transparency.
+- `src/components/ui/sheet.tsx`
+  - Same overlay treatment.
+  - Sheet content: add `bg-popover` (already there) but switch to `shadow-[var(--shadow-elevation-3)]` and `border-l-2 border-border`.
+- `src/styles.css`
+  - Add `--overlay: oklch(0 0 0 / 0.7);` token and reference from dialog/sheet.
+  - Raise `--sidebar-border` to `oklch(0.205 0 0 / 0.16)` and add a 1px right border + `shadow-elevation-1` on the sidebar in `_authenticated.tsx` so it floats clearly above the page on narrow viewports.
+- `src/routes/_authenticated.tsx`
+  - Sidebar container: `bg-sidebar border-r border-sidebar-border shadow-[var(--shadow-elevation-1)]`.
+  - Main content wrapper: `bg-background` (explicit) so nothing inherits sidebar color.
 
-### 2. Dialog + Sheet overlays (`src/components/ui/dialog.tsx`, `sheet.tsx`)
-- Increase backdrop opacity to ~60% with `backdrop-blur-sm`.
-- Add real shadow + ring on `DialogContent` / `SheetContent` so they read as elevated.
+## 2. Real Gmail + Outlook connection (per-user OAuth)
 
-### 3. Authenticated layout (`src/routes/_authenticated.tsx`)
-- Add `AI Engine` to NAV pointing to `/ai-engine` (new route).
-- Apply new sidebar background, add subtle right shadow, ensure mobile sheet uses fixed dark overlay.
+- Use Lovable standard connectors (`gmail`, `microsoft-outlook`) instead of hand-rolled OAuth.
+- `src/routes/_authenticated/settings.tsx`
+  - Replace the placeholder "Connect Gmail / Outlook" buttons with calls to a new server fn `startMailboxOAuth({ provider })` that returns the connector authorize URL, then opens it in a popup. On callback we persist a row in `mailboxes` (provider, email, status=`connected`, metadata={connection_id}).
+- New server fn file `src/lib/mailbox-oauth.functions.ts` — wraps `authorizeAppUserOAuth` for `gmail` / `microsoft-outlook`.
+- Update `src/lib/mailboxes.functions.ts` `deleteMailbox` to also revoke the connector connection.
 
-### 4. Expanded campaign creation (`src/routes/_authenticated/campaigns.tsx` + `campaigns.functions.ts`)
-Replace minimal dialog with a 2-step or scrollable form capturing:
-- **Basics**: name, objective/goal, default tone (Select).
-- **Audience research brief**: target industry, company size, target role/title, geography, pain point (used by AI enrichment + message generation).
-- **Sender identity**: sender name, sender email, signature, calendar/CTA link.
-- **Channel**: email / linkedin (default email).
-- **Sending channel binding**: pick a connected mailbox (Gmail / Outlook / SMTP fallback) — list connections from a new `email_accounts` table; show "Connect Gmail" / "Connect Outlook" buttons if none.
+## 3. Scheduled send worker
 
-Persist new fields on `campaigns` via migration (audience_brief jsonb, sender_name, sender_email, signature, cta_url, email_account_id).
+- New public API route `src/routes/api/public/send-due-messages.ts`
+  - HMAC-verified (`SEND_WORKER_SECRET`). Picks up `messages` where `status='approved' AND scheduled_at <= now()`, groups by `campaign_id → mailbox_id`, and dispatches through the connector gateway (Gmail `users/me/messages/send` or Outlook `me/sendMail`) using `callAsAppUser` with the mailbox's stored `connection_id`.
+  - On success: `status='sent'`, `sent_at=now()`, insert `message_events(type='sent')`. On failure: `status='failed'` + event with error.
+- pg_cron entry (migration) hitting the stable `project--<id>.lovable.app/api/public/send-due-messages` URL every minute.
 
-### 5. Email connector wiring
-- New `email_accounts` table (id, workspace_id, provider [`gmail`|`outlook`|`smtp`], email, display_name, oauth_tokens jsonb, status).
-- Settings page gains "Mailboxes" section with **Connect Gmail** / **Connect Outlook** buttons that kick off OAuth via the Lovable connector flow (Google Mail / Microsoft Outlook connectors).
-- Server fn `sendCampaignMessage` routes through the matching connector gateway (Gmail `users/me/messages/send` or Outlook `me/sendMail`).
-- Campaign create dialog references one of these accounts.
+## 4. Inbox webhook (reply capture)
 
-### 6. Analytics page (`src/routes/_authenticated/analytics.tsx`)
-Build a real dashboard:
-- KPI tiles: messages sent, open rate, reply rate, positive reply rate, leads enriched (7d / 30d toggle).
-- Time-series line chart (sent vs replied) using `recharts` (already in deps via shadcn chart).
-- Top campaigns table with sent / reply%.
-- Server fn `getAnalytics({ workspace_id, range })` aggregating from `messages` + `message_events`.
+- Public route `src/routes/api/public/mailbox-webhook.ts` — receives Gmail push / Outlook subscription notifications, looks up mailbox by external id, fetches the new message via connector, matches `In-Reply-To` against `messages.id`, inserts a `message_events(type='reply')` row and flips lead status to `replied`.
+- Settings page gains a "Listening for replies" indicator per mailbox.
 
-### 7. AI Engine route (`src/routes/_authenticated/ai-engine.tsx`)
-New page exposing:
-- Active model (Lovable AI Gateway), default prompt persona.
-- Recent `ai_jobs` table with status, kind, duration, output preview.
-- Toggle: auto-approve threshold (already on `workspaces`).
-- "Test prompt" panel that runs a small generation against a sample lead.
+## 5. Wire-up + secrets
 
-Make sidebar entry a `<Link>` so it actually navigates.
+- `secrets--add_secret` for `SEND_WORKER_SECRET` and `MAILBOX_WEBHOOK_SECRET`.
+- `standard_connectors--connect` for `gmail` and `microsoft-outlook` (asked once at first use).
+- Update `.lovable/plan.md` to reflect new architecture.
 
-### 8. Login polish (`src/routes/login.tsx`)
-- Increase vertical rhythm (`space-y-10`, larger headline, looser leading on supporting copy).
-- Better divider, larger inputs (`h-11`), focus ring on `--ai`.
-- Inline error state under inputs instead of toast-only.
-- Mobile: stronger brand mark, centered card with soft shadow.
-- Wire real Google sign-in via `lovable.auth.signInWithOAuth("google", ...)` (and call `configure_social_auth` for Google).
+## Out of scope (still)
 
-### 9. DB migration
-- `alter table campaigns add audience_brief jsonb, sender_name text, sender_email text, signature text, cta_url text, email_account_id uuid`.
-- `create table email_accounts (...)` with RLS scoped to workspace + GRANTs.
-
-## Technical notes
-
-- Email connectors: use `standard_connectors--connect` with `google_mail` and `microsoft_outlook`. Both route through `connector-gateway.lovable.dev`. These connect the **builder's** account — flag this in UI ("connects your Gmail to send from"). For per-user sender accounts later, we'd need full OAuth; out of scope here.
-- All new server fns use `requireSupabaseAuth` middleware; chart data fetched via `useSuspenseQuery` in loader pattern.
-- New dialog form: keep it as a single scrollable `DialogContent` with `max-h-[85vh] overflow-y-auto` rather than a wizard, to stay Linear-like.
-- Sidebar fix is purely token-level — no component rewrite.
-
-## Out of scope (call out to user)
-- Per-end-user OAuth (each teammate connecting their own mailbox) — needs custom Google/MS OAuth app.
-- Actual cron-based send scheduler — current "Send" remains manual approve → send-now until queue worker is built.
+- Multi-tenant inbox UI threading (current Inbox page keeps showing latest reply per lead).
+- Bounce/spam classification beyond the raw event row.
 
 ## Order of execution
-1. Tokens + overlay polish (sidebar, dialogs, sheet, login spacing) — visible immediately.
-2. Migration for `email_accounts` + extra campaign columns.
-3. Expanded campaign form + sender/audience fields.
-4. Connector wiring (Gmail/Outlook) + Settings mailbox section.
-5. AI Engine route + sidebar link.
-6. Analytics dashboard with real aggregations.
-7. Google sign-in on login.
+
+1. Overlay + sidebar surface fixes (CSS + dialog/sheet/_authenticated).
+2. Mailbox OAuth via connectors + settings UI.
+3. Send worker route + cron migration + secret.
+4. Inbox webhook + secret.
+5. Smoke test: create campaign → connect Gmail → approve a draft → cron sends → reply event lands in Inbox.
