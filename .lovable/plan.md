@@ -1,95 +1,82 @@
 ## Goal
 
-Replace the current UI with a clean, modern SaaS dashboard (Cloud White palette, Space Grotesk + DM Sans, dashboard layout) that fixes every overlay/visibility issue, and wire in integrations to speed up onboarding. All existing functionality is preserved — only the shell, surfaces, and pages are rebuilt.
+Replace the "copy this into Lovable chat" flow with real, self-serve in-app integrations. Each Connect button collects credentials in a dialog, a server function verifies them live against the provider, and on success stores them encrypted per-user in the database.
 
-## Design system (locked)
+## Storage model
 
-Rewrite `src/styles.css` from scratch with a single, opinionated token set:
+New table `public.user_integrations`:
 
-- Background `#FAFBFC`, surface `#FFFFFF`, border `#E8ECF1`, muted `#94A3B8`, foreground `#0F172A`, primary `#3B82F6` (with `--primary-hover`, `--primary-soft`).
-- Dark mode mirror (deep slate bg, white-on-dark surfaces, same blue primary).
-- Sidebar tokens: opaque white surface, hard 1px border, no transparency.
-- Overlay token: `--overlay: rgb(15 23 42 / 0.6)` + `backdrop-blur(8px)`.
-- Surface tokens for popovers/dialogs/sheets: forced opaque white in light, opaque slate-900 in dark — no token references that resolve to translucent colors.
-- Elevation scale (`--shadow-sm/md/lg/xl`) used consistently.
-- Typography: import Space Grotesk (600/700) for headings, DM Sans (400/500) for body via `@import` in `styles.css`; set `font-family` on `html`, headings get `font-display`.
-- Radius scale 8/12/16; spacing rhythm on 4px.
+```text
+id              uuid pk
+user_id         uuid  (auth.uid())
+workspace_id    uuid  (current workspace)
+provider        text  ('resend' | 'twilio' | 'posthog' | 'openai' | 'smtp_gmail' | 'smtp_outlook' | 'stripe')
+status          text  ('connected' | 'error')
+secret_ciphertext bytea   -- AES-256-GCM(JSON credentials)
+secret_iv       bytea
+metadata        jsonb     -- non-secret display fields (from address, smtp host, posthog host, twilio from-number, stripe account name)
+last_verified_at timestamptz
+last_error      text
+created_at / updated_at
+unique (user_id, provider)
+```
 
-## Overlay & sheet rebuild (root cause fix)
+RLS: row owner only (`user_id = auth.uid()`), plus workspace member read for visibility on shared integration list. No grant to anon.
 
-Rewrite `dialog.tsx`, `sheet.tsx`, `popover.tsx`, `dropdown-menu.tsx`, `select.tsx`, `command.tsx`:
-- Overlay: `bg-[var(--overlay)] backdrop-blur-md`, fixed inset-0, z-50.
-- Content: `bg-card text-card-foreground border border-border shadow-xl rounded-2xl` — no `bg-popover/95`, no opacity modifiers, no `!important` hacks. Add explicit `isolate` + `z-50`.
-- Add a portal `<div id="overlay-root">` in `__root.tsx` so Radix portals always mount above app content.
-- Audit `sidebar.tsx` for any `bg-sidebar/X` opacity — replace with solid token.
+Encryption: AES-256-GCM with a server-only `INTEGRATION_ENC_KEY` (32-byte base64). I'll request that secret once via add_secret — it's the master key, not a per-provider key, so it's a one-time setup and never asked again.
 
-## App shell rewrite
+## Server functions (`src/lib/integrations.functions.ts` + `integrations.server.ts`)
 
-New `src/components/app-shell/`:
-- `AppSidebar.tsx` — collapsible icon sidebar with grouped nav (Dashboard, Leads, Campaigns, Inbox, Analytics, AI Engine, Integrations, Settings), active state via `useRouterState`, workspace switcher at top, user menu at bottom.
-- `AppHeader.tsx` — breadcrumb, global command-K search, theme toggle, notifications, quick-create button.
-- `PageHeader.tsx`, `EmptyState.tsx`, `StatCard.tsx`, `DataTable.tsx`, `Section.tsx` primitives so every page looks consistent.
-- `ThemeProvider.tsx` — class-based dark/light with localStorage + system default.
+All `createServerFn` + `requireSupabaseAuth`. Plain helpers in `.server.ts`.
 
-Wire shell in `src/routes/_authenticated.tsx`. Public routes (`/login`) keep their own minimal shell.
+- `listIntegrations()` → array of `{ provider, status, metadata, last_verified_at, last_error }` for the current user. Never returns secrets.
+- `connectIntegration({ provider, credentials, metadata })` → verifies live, then upserts. Returns `{ ok, error?, metadata? }`.
+- `disconnectIntegration({ provider })` → deletes row.
+- `testIntegration({ provider })` → re-runs verification using stored credentials.
 
-## Page redesigns (functionality unchanged)
+### Per-provider verification (lives in `integrations.server.ts`)
 
-All pages move to: `PageHeader` → KPI strip → main `Card` content. No business-logic changes; just markup + tokens.
+| Provider | Inputs | Live check |
+|---|---|---|
+| Resend | `apiKey`, `fromEmail` | `GET https://api.resend.com/domains` with Bearer key → 200 |
+| Twilio | `accountSid`, `authToken`, `fromNumber` | `GET https://api.twilio.com/2010-04-01/Accounts/{sid}.json` with Basic auth → 200 |
+| PostHog | `projectApiKey`, `host` (default `https://us.i.posthog.com`) | `POST {host}/decide?v=3` with `{ api_key, distinct_id: "lovable-verify" }` → 200 |
+| OpenAI | `apiKey` | `GET https://api.openai.com/v1/models` with Bearer key → 200 |
+| Gmail SMTP | `email`, `appPassword` | TCP connect + STARTTLS + AUTH LOGIN to `smtp.gmail.com:587` using `nodemailer.createTransport(...).verify()` |
+| Outlook SMTP | `email`, `password` | Same against `smtp-mail.outlook.com:587` |
+| Stripe | `secretKey` (sk_live_ / sk_test_) | `GET https://api.stripe.com/v1/account` with Bearer key → 200, store `account.id` + `business_profile.name` in metadata |
 
-1. **Dashboard (`/`)** — KPI tiles (active campaigns, leads, messages sent, reply rate), recent activity, AI engine status, integration health.
-2. **Leads** — `DataTable` with column filters, bulk select, side-`Sheet` for lead detail, CSV import button.
-3. **Campaigns** — card grid + table toggle; create wizard rebuilt inside a proper `Dialog` (now fully opaque) with stepper.
-4. **Campaign detail** — tabs (Overview / Sequence / Audience / Messages / Settings).
-5. **Inbox** — three-pane layout (threads / message / lead context).
-6. **Analytics** — recharts re-themed to tokens, time-range tabs, integrates PostHog event counts when configured.
-7. **AI Engine** — job stream, model selector, reasoning trace viewer.
-8. **Integrations** (new) — connection cards for Gmail, Outlook, Resend, Twilio (SMS/WhatsApp), OpenAI, Stripe, PostHog with status chip + connect/disconnect.
-9. **Settings** — workspace, sender identity, team, billing tab.
-10. **Login/Signup** — generous spacing, two-column hero, Google + email/password, password strength.
+nodemailer is Worker-compat-friendly with `nodejs_compat` enabled (uses `net`/`tls`, both supported). If it trips the runtime, I'll fall back to a raw `tls.connect` + SMTP handshake in `.server.ts`.
 
-## Integrations wiring
+All verification calls use `AbortSignal.timeout(8000)`. On failure, the function returns `{ ok: false, error: "<short reason>" }` and does NOT persist the row (existing connected row left untouched).
 
-All implemented as `createServerFn` (or `/api/public/*` for webhooks):
+## Frontend rewrite of `src/routes/_authenticated/integrations.tsx`
 
-- **Resend** — connect via `standard_connectors--connect("resend")`; `src/lib/email-send.functions.ts` sends through the connector gateway when the campaign mailbox provider is `resend`. Adds a "Resend" option in the mailbox connect dialog.
-- **Twilio** — `standard_connectors--connect("twilio")`; new `channel` extension on `sequence_steps` (`sms`, `whatsapp`); `src/lib/twilio.functions.ts` for send; mailbox UI gains SMS/WhatsApp sender rows.
-- **OpenAI** — already covered by Lovable AI Gateway; expose model picker (gpt-5, gpt-5-mini, gemini-2.5-pro) on AI Engine page and per-campaign override stored in `campaigns.ai_model` (new column).
-- **Stripe** — call `payments--recommend_payment_provider` then `enable_stripe_payments`; add Billing tab in Settings with plan + usage; gate seat count > N behind paid plan.
-- **PostHog** — request `POSTHOG_API_KEY` + `POSTHOG_HOST` via `add_secret`; `src/lib/analytics-posthog.functions.ts` proxies event capture; client snippet in `__root.tsx` initialises `posthog-js` when public key env is set; surface top events on Analytics page.
-- **Supabase** — already the backend; no change. Confirm `attachSupabaseAuth` is registered in `src/start.ts`.
+- Load real status via `useSuspenseQuery` against `listIntegrations`. Status pill comes from DB, not localStorage.
+- One dialog component per setup-kind: `apikey` (one field), `apikey+from` (Resend / SMTP), `twilio` (three fields), `posthog` (key + host), `stripe` (one field).
+- Drop "managed" copy for Supabase / Lovable AI — leave them as informational cards with no Connect button.
+- Drop Gmail OAuth / Outlook OAuth / "paste in chat" copy entirely. Replace with SMTP forms (Gmail = App Password, Outlook = account password) with inline links to provider docs.
+- Submit handler calls `connectIntegration`, shows toast, on success closes dialog and invalidates the query. On failure shows the `error` string inline.
+- Connected card shows masked metadata (e.g. `from: ops@acme.com`, `account: acct_123…`, `last verified 2 min ago`) plus `Test` and `Disconnect` buttons.
+- Remove all localStorage code and the chat-prompt copy block.
 
-## Database migration
+## Secret required
 
-Single migration:
-- `ALTER TABLE campaigns ADD COLUMN ai_model TEXT DEFAULT 'google/gemini-2.5-flash';`
-- `ALTER TABLE sequence_steps`: extend `step_channel` enum to include `sms`, `whatsapp`.
-- `ALTER TABLE mailboxes`: allow `provider` values `resend`, `twilio_sms`, `twilio_whatsapp` (no enum, already text).
-- New `integrations` table (workspace_id, kind, status, metadata jsonb) + RLS + GRANTs to track which connectors are linked per workspace.
+I'll request exactly one secret via `add_secret`:
 
-## File map
+- `INTEGRATION_ENC_KEY` — 32-byte base64, used by the server to AES-GCM encrypt every provider credential blob. This is the only "Lovable prompt" the user will ever see, and it's a one-time workspace setup — not per-integration.
 
-- Rewrite: `src/styles.css`, `src/components/ui/{dialog,sheet,popover,dropdown-menu,select,command,sidebar}.tsx`, `src/routes/__root.tsx`, `src/routes/_authenticated.tsx`, `src/routes/login.tsx`, all `_authenticated/*.tsx` pages.
-- Create: `src/components/app-shell/*`, `src/components/theme-provider.tsx`, `src/lib/{email-send,twilio,analytics-posthog,integrations}.functions.ts`, `src/routes/_authenticated/integrations.tsx`.
-- Touch: `src/start.ts` (verify auth attacher), `index.html` (font preconnect).
+## Out of scope (call out)
 
-## Order of execution
+- No background send worker — these integrations make credentials reachable; wiring them into campaign execution is the next step.
+- Stripe uses a raw secret key (BYOK) as you chose; this is intentionally NOT the recommended Lovable payments flow. Subscription/checkout UX comes later.
+- No Gmail/Outlook OAuth (would require registering OAuth apps in Google Cloud / Azure). SMTP-only as agreed.
 
-1. Migration (ai_model, channels, integrations table).
-2. Design tokens + font wiring.
-3. Overlay/sheet/sidebar primitives rewrite.
-4. App shell + theme provider.
-5. Page redesigns (Dashboard → Leads → Campaigns → Inbox → Analytics → AI Engine → Settings → Login).
-6. Integrations page + connector wiring (Resend, Twilio, PostHog).
-7. Stripe enable flow.
-8. Smoke test every route at 677px and desktop, verify dialogs/sheets are fully opaque.
+## Order of work
 
-## Out of scope
-
-- Multi-tenant inbox threading beyond current schema.
-- Custom OAuth apps for Gmail/Outlook (still uses existing per-user flow already wired).
-- Real send worker / cron (already planned separately).
-
-## Secrets needed
-
-I'll request via `add_secret` when we reach step 6: `POSTHOG_API_KEY`, `POSTHOG_PUBLIC_KEY`, `POSTHOG_HOST`. Resend/Twilio come from connector linking (no manual secret entry). Stripe via the enable tool.
+1. Migration: create `user_integrations` + RLS + GRANTs.
+2. Request `INTEGRATION_ENC_KEY` secret.
+3. `integrations.server.ts` — encryption helpers + per-provider verifiers.
+4. `integrations.functions.ts` — list / connect / disconnect / test.
+5. Rewrite `integrations.tsx` page with real dialogs + live verification.
+6. Smoke test each provider end-to-end via `invoke-server-function`.
