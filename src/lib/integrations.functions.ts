@@ -64,7 +64,7 @@ export const connectIntegration = createServerFn({ method: "POST" })
           status: "connected",
           secret_ciphertext: ciphertext,
           secret_iv: iv,
-          metadata: result.metadata,
+          metadata: result.metadata as JsonMeta,
           last_verified_at: new Date().toISOString(),
           last_error: null,
         },
