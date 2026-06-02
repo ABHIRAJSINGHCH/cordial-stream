@@ -114,7 +114,7 @@ export const testIntegration = createServerFn({ method: "POST" })
         status: result.ok ? "connected" : "error",
         last_verified_at: new Date().toISOString(),
         last_error: result.ok ? null : result.error,
-        metadata: result.ok ? result.metadata : undefined,
+        metadata: result.ok ? (result.metadata as JsonMeta) : undefined,
       })
       .eq("user_id", userId)
       .eq("provider", data.provider);
