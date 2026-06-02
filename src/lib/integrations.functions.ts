@@ -7,6 +7,7 @@ import {
   encryptJson,
   decryptJson,
   verifyProvider,
+  type JsonMeta,
 } from "./integrations.server";
 
 const ProviderEnum = z.enum(PROVIDERS as [Provider, ...Provider[]]);
