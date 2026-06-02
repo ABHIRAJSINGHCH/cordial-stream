@@ -60,7 +60,8 @@ export function decryptJson<T = unknown>(ciphertextB64: string, ivB64: string): 
 // but for compatibility we'll store text-base64 columns. We'll cast at the SQL layer.
 
 // ---------- Verifiers ----------
-export type VerifyResult = { ok: true; metadata: Record<string, unknown> } | { ok: false; error: string };
+export type JsonMeta = Record<string, string | number | boolean | null>;
+export type VerifyResult = { ok: true; metadata: JsonMeta } | { ok: false; error: string };
 
 const TIMEOUT_MS = 8000;
 function timeoutSignal() {
