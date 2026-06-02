@@ -503,6 +503,51 @@ export type Database = {
           },
         ]
       }
+      user_integrations: {
+        Row: {
+          created_at: string
+          id: string
+          last_error: string | null
+          last_verified_at: string | null
+          metadata: Json
+          provider: string
+          secret_ciphertext: string | null
+          secret_iv: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          last_verified_at?: string | null
+          metadata?: Json
+          provider: string
+          secret_ciphertext?: string | null
+          secret_iv?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          last_verified_at?: string | null
+          metadata?: Json
+          provider?: string
+          secret_ciphertext?: string | null
+          secret_iv?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       workspace_members: {
         Row: {
           created_at: string
