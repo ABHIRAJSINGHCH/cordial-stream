@@ -1,82 +1,86 @@
-## Goal
+## Why "Couldn't connect" is happening right now
 
-Replace the "copy this into Lovable chat" flow with real, self-serve in-app integrations. Each Connect button collects credentials in a dialog, a server function verifies them live against the provider, and on success stores them encrypted per-user in the database.
+The Gmail / Outlook SMTP verifier in `src/lib/integrations.server.ts` opens a raw TCP socket using Node's `net.connect` + `tls.connect`. The app runs on a Cloudflare Worker SSR runtime — even with `nodejs_compat`, raw outbound TCP via `node:net` is **not supported** there. So the verifier throws immediately and the UI shows the generic "Couldn't connect" message regardless of whether your App Password is correct.
 
-## Storage model
+This is the real bug, not your password. We have to stop trying to do SMTP from the Worker and switch each email provider to an HTTPS-based path that actually works in this runtime.
 
-New table `public.user_integrations`:
+## What I'll change
+
+### 1. Replace SMTP with paths that work + are non-technical
+
+| Provider | Old (broken / scary) | New (works + simple) |
+|---|---|---|
+| Gmail | App Password + SMTP socket | **One-click "Sign in with Google"** via the built-in Gmail connector — no passwords typed anywhere |
+| Outlook | Account password + SMTP socket | Removed for now (no OAuth connector available); UI says "coming soon" instead of failing |
+| Resend | API key + From email | Kept, but with a guided wizard (see below) |
+| Stripe | Secret key paste | **One-click "Connect Stripe"** via the built-in Stripe connector |
+| Twilio / OpenAI / PostHog | API keys | Kept, with the guided wizard |
+
+Gmail OAuth uses the Lovable Gmail connector — the user just clicks "Connect Gmail", picks their Google account in a popup, and is done. No App Password, no 2FA setup, no SMTP terminology.
+
+### 2. Guided, non-technical Connect wizard
+
+Each "Connect" button opens a 3-step wizard instead of a flat form:
 
 ```text
-id              uuid pk
-user_id         uuid  (auth.uid())
-workspace_id    uuid  (current workspace)
-provider        text  ('resend' | 'twilio' | 'posthog' | 'openai' | 'smtp_gmail' | 'smtp_outlook' | 'stripe')
-status          text  ('connected' | 'error')
-secret_ciphertext bytea   -- AES-256-GCM(JSON credentials)
-secret_iv       bytea
-metadata        jsonb     -- non-secret display fields (from address, smtp host, posthog host, twilio from-number, stripe account name)
-last_verified_at timestamptz
-last_error      text
-created_at / updated_at
-unique (user_id, provider)
+Step 1 — What you'll need
+   Plain-English checklist + a "Open <provider> dashboard" button
+   that deep-links to the exact page where the value lives.
+
+Step 2 — Paste the value
+   One field at a time. Each field has:
+     • Friendly label   ("Your sending email address")
+     • Plain hint       ("This is the email people will see in their inbox")
+     • "Where do I find this?" expandable with screenshot-style instructions
+     • Paste button that auto-trims whitespace + hidden characters
+
+Step 3 — We'll test it for you
+   Live verification with a progress indicator, then either:
+     ✓  "Connected. Sending a test message to <you>?" (optional)
+     ✗  Specific, human error (see error mapping below)
 ```
 
-RLS: row owner only (`user_id = auth.uid()`), plus workspace member read for visibility on shared integration list. No grant to anon.
+### 3. Real error messages instead of "Couldn't connect"
 
-Encryption: AES-256-GCM with a server-only `INTEGRATION_ENC_KEY` (32-byte base64). I'll request that secret once via add_secret — it's the master key, not a per-provider key, so it's a one-time setup and never asked again.
+The server already returns `{ ok: false, error }`, but the messages are generic. I'll map common upstream responses to actionable text:
 
-## Server functions (`src/lib/integrations.functions.ts` + `integrations.server.ts`)
+| Upstream signal | Shown to user |
+|---|---|
+| Resend 401 / 403 | "Resend didn't accept that key. Double-check you copied the whole key starting with `re_`." |
+| Resend 422 "domain not verified" | "Resend says `<domain>` isn't verified yet. Open Resend → Domains and finish DNS setup." |
+| Twilio 401 | "Twilio rejected the SID/token pair. Make sure both come from the same project in Twilio Console." |
+| Stripe 401 | "Stripe didn't accept that key. Use a Secret key (starts with `sk_`), not a Publishable key." |
+| Network/timeout | "We couldn't reach <provider> from the server. Try again in a moment." |
 
-All `createServerFn` + `requireSupabaseAuth`. Plain helpers in `.server.ts`.
+### 4. Friendlier card UX
 
-- `listIntegrations()` → array of `{ provider, status, metadata, last_verified_at, last_error }` for the current user. Never returns secrets.
-- `connectIntegration({ provider, credentials, metadata })` → verifies live, then upserts. Returns `{ ok, error?, metadata? }`.
-- `disconnectIntegration({ provider })` → deletes row.
-- `testIntegration({ provider })` → re-runs verification using stored credentials.
+- Status pill becomes "Ready to send", "Needs attention", or "Not set up yet" instead of "Connected/Error/Not connected".
+- Connected cards show a one-line summary in plain English: "Sending from `ops@acme.com` — last checked 2 min ago".
+- "Send test" button on every connected card (sends a test email / SMS / event to the logged-in user) so users know it really works end-to-end.
 
-### Per-provider verification (lives in `integrations.server.ts`)
+## Files changed
 
-| Provider | Inputs | Live check |
-|---|---|---|
-| Resend | `apiKey`, `fromEmail` | `GET https://api.resend.com/domains` with Bearer key → 200 |
-| Twilio | `accountSid`, `authToken`, `fromNumber` | `GET https://api.twilio.com/2010-04-01/Accounts/{sid}.json` with Basic auth → 200 |
-| PostHog | `projectApiKey`, `host` (default `https://us.i.posthog.com`) | `POST {host}/decide?v=3` with `{ api_key, distinct_id: "lovable-verify" }` → 200 |
-| OpenAI | `apiKey` | `GET https://api.openai.com/v1/models` with Bearer key → 200 |
-| Gmail SMTP | `email`, `appPassword` | TCP connect + STARTTLS + AUTH LOGIN to `smtp.gmail.com:587` using `nodemailer.createTransport(...).verify()` |
-| Outlook SMTP | `email`, `password` | Same against `smtp-mail.outlook.com:587` |
-| Stripe | `secretKey` (sk_live_ / sk_test_) | `GET https://api.stripe.com/v1/account` with Bearer key → 200, store `account.id` + `business_profile.name` in metadata |
+1. **`src/lib/integrations.server.ts`** — delete the raw-socket SMTP code (`net`/`tls`/`smtpVerify`/`verifyGmailSmtp`/`verifyOutlookSmtp`); refine error mapping for Resend/Twilio/Stripe/OpenAI/PostHog.
+2. **`src/lib/integrations.functions.ts`** — drop `smtp_gmail` / `smtp_outlook` from the provider enum; add `gmail_oauth` provider backed by the Gmail connector (status read from `list_connections` result, no credentials stored in `user_integrations`).
+3. **New `src/lib/integrations-gmail.functions.ts`** — server fn that returns whether the Gmail connector is linked + the connected email address, and a "send test" server fn that uses the gateway.
+4. **`src/routes/_authenticated/integrations.tsx`** — rewrite into the 3-step wizard, replace SMTP cards with a single "Gmail" card that triggers the connector flow, replace Stripe BYOK card with a "Connect Stripe" card, add "Send test" buttons, switch status copy to plain English.
+5. **Migration** — no schema change; `smtp_gmail` / `smtp_outlook` rows (if any) are left in the DB but hidden from the UI.
 
-nodemailer is Worker-compat-friendly with `nodejs_compat` enabled (uses `net`/`tls`, both supported). If it trips the runtime, I'll fall back to a raw `tls.connect` + SMTP handshake in `.server.ts`.
+## Connectors I'll wire up (one-click, no typing)
 
-All verification calls use `AbortSignal.timeout(8000)`. On failure, the function returns `{ ok: false, error: "<short reason>" }` and does NOT persist the row (existing connected row left untouched).
+- **Gmail** (`google_mail`) — replaces Gmail SMTP entirely.
+- **Stripe** (`stripe--enable_stripe`) — replaces Stripe BYOK.
 
-## Frontend rewrite of `src/routes/_authenticated/integrations.tsx`
+Both are already available in this workspace; the user only sees a "Sign in with Google" / "Connect Stripe" popup.
 
-- Load real status via `useSuspenseQuery` against `listIntegrations`. Status pill comes from DB, not localStorage.
-- One dialog component per setup-kind: `apikey` (one field), `apikey+from` (Resend / SMTP), `twilio` (three fields), `posthog` (key + host), `stripe` (one field).
-- Drop "managed" copy for Supabase / Lovable AI — leave them as informational cards with no Connect button.
-- Drop Gmail OAuth / Outlook OAuth / "paste in chat" copy entirely. Replace with SMTP forms (Gmail = App Password, Outlook = account password) with inline links to provider docs.
-- Submit handler calls `connectIntegration`, shows toast, on success closes dialog and invalidates the query. On failure shows the `error` string inline.
-- Connected card shows masked metadata (e.g. `from: ops@acme.com`, `account: acct_123…`, `last verified 2 min ago`) plus `Test` and `Disconnect` buttons.
-- Remove all localStorage code and the chat-prompt copy block.
+## Out of scope (calling out)
 
-## Secret required
-
-I'll request exactly one secret via `add_secret`:
-
-- `INTEGRATION_ENC_KEY` — 32-byte base64, used by the server to AES-GCM encrypt every provider credential blob. This is the only "Lovable prompt" the user will ever see, and it's a one-time workspace setup — not per-integration.
-
-## Out of scope (call out)
-
-- No background send worker — these integrations make credentials reachable; wiring them into campaign execution is the next step.
-- Stripe uses a raw secret key (BYOK) as you chose; this is intentionally NOT the recommended Lovable payments flow. Subscription/checkout UX comes later.
-- No Gmail/Outlook OAuth (would require registering OAuth apps in Google Cloud / Azure). SMTP-only as agreed.
+- **Outlook**: there's no Outlook connector available, and SMTP doesn't work in this runtime. I'll show it as "Coming soon" rather than ship something broken. If you need Outlook urgently, the realistic path is to register an Azure OAuth app — bigger piece of work, separate request.
+- **Actually sending campaign emails through Gmail**: this plan makes the connection real and testable. Wiring it into the campaign sender is the next step.
 
 ## Order of work
 
-1. Migration: create `user_integrations` + RLS + GRANTs.
-2. Request `INTEGRATION_ENC_KEY` secret.
-3. `integrations.server.ts` — encryption helpers + per-provider verifiers.
-4. `integrations.functions.ts` — list / connect / disconnect / test.
-5. Rewrite `integrations.tsx` page with real dialogs + live verification.
-6. Smoke test each provider end-to-end via `invoke-server-function`.
+1. Rip out raw-socket SMTP from `integrations.server.ts`.
+2. Link the Gmail + Stripe connectors and add the small server fns that read their status.
+3. Rewrite the page into the 3-step wizard with the new copy + error mapping.
+4. Smoke test Gmail OAuth, Stripe OAuth, and one API-key provider (Resend) end-to-end.
