@@ -11,6 +11,7 @@ import {
   addLeadsToCampaign,
   campaignAnalytics,
 } from "@/lib/campaigns.functions";
+import { sendApprovedMessage } from "@/lib/gmail.functions";
 import { listLeads } from "@/lib/leads.functions";
 import { ensureWorkspace } from "@/lib/workspace.functions";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sparkles, Plus, Trash2, Mail, Linkedin, Hand, Check, X, ChevronLeft } from "lucide-react";
+import { Sparkles, Plus, Trash2, Mail, Linkedin, Hand, Check, X, ChevronLeft, Send } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
