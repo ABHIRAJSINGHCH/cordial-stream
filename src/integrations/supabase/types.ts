@@ -284,38 +284,68 @@ export type Database = {
       }
       mailboxes: {
         Row: {
+          access_token_ciphertext: string | null
+          access_token_iv: string | null
           created_at: string
           created_by: string | null
           display_name: string | null
           email: string
           id: string
+          last_test_at: string | null
+          last_test_error: string | null
+          last_test_status: string | null
           metadata: Json | null
           provider: string
+          provider_account_id: string | null
+          refresh_token_ciphertext: string | null
+          refresh_token_iv: string | null
+          scopes: string | null
           status: string
+          token_expires_at: string | null
           updated_at: string
           workspace_id: string
         }
         Insert: {
+          access_token_ciphertext?: string | null
+          access_token_iv?: string | null
           created_at?: string
           created_by?: string | null
           display_name?: string | null
           email: string
           id?: string
+          last_test_at?: string | null
+          last_test_error?: string | null
+          last_test_status?: string | null
           metadata?: Json | null
           provider: string
+          provider_account_id?: string | null
+          refresh_token_ciphertext?: string | null
+          refresh_token_iv?: string | null
+          scopes?: string | null
           status?: string
+          token_expires_at?: string | null
           updated_at?: string
           workspace_id: string
         }
         Update: {
+          access_token_ciphertext?: string | null
+          access_token_iv?: string | null
           created_at?: string
           created_by?: string | null
           display_name?: string | null
           email?: string
           id?: string
+          last_test_at?: string | null
+          last_test_error?: string | null
+          last_test_status?: string | null
           metadata?: Json | null
           provider?: string
+          provider_account_id?: string | null
+          refresh_token_ciphertext?: string | null
+          refresh_token_iv?: string | null
+          scopes?: string | null
           status?: string
+          token_expires_at?: string | null
           updated_at?: string
           workspace_id?: string
         }
@@ -445,6 +475,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      oauth_states: {
+        Row: {
+          created_at: string
+          expires_at: string
+          provider: string
+          redirect_to: string | null
+          state: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          provider: string
+          redirect_to?: string | null
+          state: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          provider?: string
+          redirect_to?: string | null
+          state?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
       }
       sequence_steps: {
         Row: {
