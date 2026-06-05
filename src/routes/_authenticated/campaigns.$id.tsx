@@ -357,10 +357,11 @@ type Message = {
   id: string;
   subject: string | null;
   body: string | null;
+  channel: "email" | "linkedin" | "manual";
   ai_reasoning: string[];
   ai_confidence: number | null;
   status: string;
-  campaign_leads?: { leads?: { full_name: string; company: string | null } | null } | null;
+  campaign_leads?: { leads?: { full_name: string; company: string | null; email?: string | null } | null } | null;
 };
 
 function AIInspector({
