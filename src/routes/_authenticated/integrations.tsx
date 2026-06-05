@@ -38,6 +38,7 @@ import {
   disconnectIntegration,
   testIntegration,
 } from "@/lib/integrations.functions";
+import { startGmailConnect } from "@/lib/gmail.functions";
 
 export const Route = createFileRoute("/_authenticated/integrations")({
   head: () => ({ meta: [{ title: "Integrations — Kinetic" }] }),
@@ -302,23 +303,14 @@ const PROVIDERS: ProviderDef[] = [
 
 const COMING_SOON: ComingSoon[] = [
   {
-    id: "gmail",
-    name: "Gmail",
-    blurb: "One-click 'Sign in with Google' to send through your Gmail.",
-    category: "Email",
-    Icon: Mail,
-    accent: "bg-red-500/10 text-red-600",
-    reason:
-      "We're switching this from SMTP (which doesn't work reliably) to a one-click Google sign-in. In the meantime, Resend is the easiest way to send email.",
-  },
-  {
     id: "outlook",
     name: "Outlook",
     blurb: "One-click sign-in to send through your Outlook account.",
     category: "Email",
     Icon: Mail,
     accent: "bg-sky-500/10 text-sky-600",
-    reason: "Outlook sign-in is on the way. For now, please use Resend for outbound email.",
+    reason:
+      "Outlook sign-in needs Microsoft developer credentials, which require a paid Microsoft account. We'll enable this once those are available.",
   },
 ];
 
