@@ -401,6 +401,18 @@ function AIInspector({
     },
   });
 
+  const send = useServerFn(sendApprovedMessage);
+  const sendNow = useMutation({
+    mutationFn: (id: string) => send({ data: { message_id: id } }),
+    onSuccess: (r) => {
+      if (r.ok) toast.success("Sent.");
+      else toast.error(r.error);
+      qc.invalidateQueries({ queryKey: ["campaign-messages", campaignId] });
+      qc.invalidateQueries({ queryKey: ["campaign-analytics", campaignId] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Send failed"),
+  });
+
   return (
     <div className="flex flex-col">
       <div className="p-5 border-b border-border space-y-4">
@@ -482,6 +494,50 @@ function AIInspector({
               </div>
             </div>
           ))}
+
+        {messages.filter((m) => m.status === "approved" && m.channel === "email").length > 0 && (
+          <>
+            <h3 className="font-mono text-[10px] font-bold uppercase tracking-widest pt-2">
+              Ready to send
+            </h3>
+            {messages
+              .filter((m) => m.status === "approved" && m.channel === "email")
+              .slice(0, 6)
+              .map((m) => (
+                <div
+                  key={m.id}
+                  className="p-3 bg-card border border-border rounded-md space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium truncate">
+                      {m.campaign_leads?.leads?.full_name ?? "Lead"}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {m.campaign_leads?.leads?.email ?? "no email"}
+                    </span>
+                  </div>
+                  {m.subject && (
+                    <div className="text-xs font-semibold truncate">{m.subject}</div>
+                  )}
+                  <Button
+                    size="sm"
+                    className="h-7 w-full text-xs"
+                    disabled={sendNow.isPending}
+                    onClick={() => sendNow.mutate(m.id)}
+                  >
+                    <Send className="size-3 mr-1" /> Send now via Gmail
+                  </Button>
+                </div>
+              ))}
+            <p className="text-[10px] text-muted-foreground">
+              Sending uses the Gmail account you connected in{" "}
+              <Link to="/settings" className="underline">
+                Settings
+              </Link>
+              .
+            </p>
+          </>
+        )}
       </div>
     </div>
   );
