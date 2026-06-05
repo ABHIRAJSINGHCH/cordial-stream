@@ -227,12 +227,6 @@ export const sendApprovedMessage = createServerFn({ method: "POST" })
     } catch (e) {
       const errMsg = (e as Error).message;
       await supabase.from("messages").update({ status: "failed" }).eq("id", msg.id);
-      await supabase.from("message_events").insert({
-        message_id: msg.id,
-        workspace_id: msg.workspace_id,
-        type: "failed",
-        payload: { provider: "gmail", error: errMsg.slice(0, 500) },
-      });
       return { ok: false as const, error: errMsg };
     }
   });

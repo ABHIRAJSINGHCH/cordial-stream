@@ -176,12 +176,9 @@ export type MailboxTokens = {
 };
 
 /** Returns a valid access token, refreshing if needed; updates the mailbox row. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getValidAccessToken(
-  supabaseAdmin: {
-    from: (t: string) => {
-      update: (v: Record<string, unknown>) => { eq: (c: string, val: string) => Promise<unknown> };
-    };
-  },
+  supabaseAdmin: any,
   mailbox: MailboxTokens,
 ): Promise<string> {
   if (!mailbox.access_token_ciphertext || !mailbox.access_token_iv) {
