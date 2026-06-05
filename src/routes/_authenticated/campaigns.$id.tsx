@@ -11,6 +11,7 @@ import {
   addLeadsToCampaign,
   campaignAnalytics,
 } from "@/lib/campaigns.functions";
+import { sendApprovedMessage } from "@/lib/gmail.functions";
 import { listLeads } from "@/lib/leads.functions";
 import { ensureWorkspace } from "@/lib/workspace.functions";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sparkles, Plus, Trash2, Mail, Linkedin, Hand, Check, X, ChevronLeft } from "lucide-react";
+import { Sparkles, Plus, Trash2, Mail, Linkedin, Hand, Check, X, ChevronLeft, Send } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -356,10 +357,11 @@ type Message = {
   id: string;
   subject: string | null;
   body: string | null;
+  channel: "email" | "linkedin" | "manual";
   ai_reasoning: string[];
   ai_confidence: number | null;
   status: string;
-  campaign_leads?: { leads?: { full_name: string; company: string | null } | null } | null;
+  campaign_leads?: { leads?: { full_name: string; company: string | null; email?: string | null } | null } | null;
 };
 
 function AIInspector({
@@ -398,6 +400,18 @@ function AIInspector({
       qc.invalidateQueries({ queryKey: ["campaign-messages", campaignId] });
       qc.invalidateQueries({ queryKey: ["campaign-analytics", campaignId] });
     },
+  });
+
+  const send = useServerFn(sendApprovedMessage);
+  const sendNow = useMutation({
+    mutationFn: (id: string) => send({ data: { message_id: id } }),
+    onSuccess: (r) => {
+      if (r.ok) toast.success("Sent.");
+      else toast.error(r.error);
+      qc.invalidateQueries({ queryKey: ["campaign-messages", campaignId] });
+      qc.invalidateQueries({ queryKey: ["campaign-analytics", campaignId] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Send failed"),
   });
 
   return (
@@ -481,6 +495,50 @@ function AIInspector({
               </div>
             </div>
           ))}
+
+        {messages.filter((m) => m.status === "approved" && m.channel === "email").length > 0 && (
+          <>
+            <h3 className="font-mono text-[10px] font-bold uppercase tracking-widest pt-2">
+              Ready to send
+            </h3>
+            {messages
+              .filter((m) => m.status === "approved" && m.channel === "email")
+              .slice(0, 6)
+              .map((m) => (
+                <div
+                  key={m.id}
+                  className="p-3 bg-card border border-border rounded-md space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium truncate">
+                      {m.campaign_leads?.leads?.full_name ?? "Lead"}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {m.campaign_leads?.leads?.email ?? "no email"}
+                    </span>
+                  </div>
+                  {m.subject && (
+                    <div className="text-xs font-semibold truncate">{m.subject}</div>
+                  )}
+                  <Button
+                    size="sm"
+                    className="h-7 w-full text-xs"
+                    disabled={sendNow.isPending}
+                    onClick={() => sendNow.mutate(m.id)}
+                  >
+                    <Send className="size-3 mr-1" /> Send now via Gmail
+                  </Button>
+                </div>
+              ))}
+            <p className="text-[10px] text-muted-foreground">
+              Sending uses the Gmail account you connected in{" "}
+              <Link to="/settings" className="underline">
+                Settings
+              </Link>
+              .
+            </p>
+          </>
+        )}
       </div>
     </div>
   );

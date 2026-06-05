@@ -1,38 +1,180 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ensureWorkspace, updateWorkspace } from "@/lib/workspace.functions";
-import { listMailboxes, createMailbox, deleteMailbox } from "@/lib/mailboxes.functions";
+import {
+  listConnectedMailboxes,
+  disconnectMailbox,
+  sendTestEmail,
+  startGmailConnect,
+} from "@/lib/gmail.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
-import { Mail, Plus, Trash2 } from "lucide-react";
+import { Mail, Trash2, Send, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "Settings — Kinetic OS" }] }),
   component: SettingsPage,
 });
 
+type Mailbox = {
+  id: string;
+  provider: string;
+  email: string;
+  display_name: string | null;
+  status: string;
+  last_test_at: string | null;
+  last_test_status: string | null;
+  last_test_error: string | null;
+};
+
+function StatusBadge({ status }: { status: string }) {
+  if (status === "ready" || status === "connected")
+    return (
+      <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 gap-1">
+        <CheckCircle2 className="h-3 w-3" /> Ready to send
+      </Badge>
+    );
+  if (status === "needs_reauth")
+    return (
+      <Badge variant="destructive" className="gap-1">
+        <AlertCircle className="h-3 w-3" /> Needs sign-in again
+      </Badge>
+    );
+  if (status === "error")
+    return (
+      <Badge variant="destructive" className="gap-1">
+        <AlertCircle className="h-3 w-3" /> Last send failed
+      </Badge>
+    );
+  return <Badge variant="secondary">Not connected yet</Badge>;
+}
+
+function MailboxRow({ m, defaultTo }: { m: Mailbox; defaultTo: string }) {
+  const test = useServerFn(sendTestEmail);
+  const remove = useServerFn(disconnectMailbox);
+  const start = useServerFn(startGmailConnect);
+  const qc = useQueryClient();
+  const [showTest, setShowTest] = useState(false);
+  const [to, setTo] = useState(defaultTo);
+  const [busy, setBusy] = useState(false);
+
+  const onTest = async () => {
+    if (!to) return;
+    setBusy(true);
+    try {
+      const r = await test({ data: { mailbox_id: m.id, to } });
+      if (r.ok) toast.success(`Test email sent to ${to}.`);
+      else toast.error(r.error);
+      qc.invalidateQueries({ queryKey: ["mailboxes"] });
+      setShowTest(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onReconnect = async () => {
+    try {
+      const { consentUrl } = await start();
+      window.location.href = consentUrl;
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  const onRemove = async () => {
+    await remove({ data: { id: m.id } });
+    toast.success("Mailbox disconnected.");
+    qc.invalidateQueries({ queryKey: ["mailboxes"] });
+  };
+
+  return (
+    <div className="border-b border-border last:border-0 px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="size-8 rounded-md bg-muted grid place-items-center shrink-0">
+            <Mail className="size-4 text-muted-foreground" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-medium truncate">
+              {m.email}
+              {m.display_name && (
+                <span className="text-muted-foreground font-normal"> · {m.display_name}</span>
+              )}
+            </div>
+            <div className="text-[11px] text-muted-foreground uppercase tracking-wider">
+              {m.provider}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <StatusBadge status={m.status} />
+        </div>
+      </div>
+
+      {m.last_test_status === "error" && m.last_test_error && (
+        <div className="mt-2 text-xs text-destructive bg-destructive/5 border border-destructive/20 rounded p-2">
+          Last test failed: {m.last_test_error}
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap gap-2 items-center">
+        {m.status === "needs_reauth" ? (
+          <Button size="sm" onClick={onReconnect}>
+            Sign in again
+          </Button>
+        ) : (
+          <Button size="sm" variant="outline" onClick={() => setShowTest((v) => !v)}>
+            <Send className="size-3 mr-1.5" />
+            Send test email
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-muted-foreground hover:text-destructive"
+          onClick={onRemove}
+        >
+          <Trash2 className="size-3 mr-1.5" />
+          Disconnect
+        </Button>
+      </div>
+
+      {showTest && (
+        <div className="mt-3 flex flex-wrap items-end gap-2 rounded-md border border-border bg-muted/30 p-3">
+          <div className="flex-1 min-w-[200px] space-y-1">
+            <Label className="text-xs">Send a test to</Label>
+            <Input
+              type="email"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              placeholder="you@example.com"
+            />
+          </div>
+          <Button size="sm" onClick={onTest} disabled={busy || !to}>
+            {busy && <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />}
+            Send test
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SettingsPage() {
   const ensure = useServerFn(ensureWorkspace);
   const update = useServerFn(updateWorkspace);
-  const listBoxes = useServerFn(listMailboxes);
-  const addBox = useServerFn(createMailbox);
-  const removeBox = useServerFn(deleteMailbox);
+  const listBoxes = useServerFn(listConnectedMailboxes);
+  const startConnect = useServerFn(startGmailConnect);
   const qc = useQueryClient();
   const { data: ws } = useQuery({ queryKey: ["workspace"], queryFn: () => ensure() });
   const { data: mailboxes = [] } = useQuery({
     queryKey: ["mailboxes"],
-    queryFn: () => listBoxes(),
+    queryFn: () => listBoxes() as Promise<Mailbox[]>,
   });
 
   const [form, setForm] = useState({
@@ -41,9 +183,6 @@ function SettingsPage() {
     sender_email: "",
     daily_send_cap: 50,
   });
-  const [mbox, setMbox] = useState<{ provider: "gmail" | "outlook" | "smtp"; email: string; display_name: string }>(
-    { provider: "gmail", email: "", display_name: "" },
-  );
 
   useEffect(() => {
     if (ws) {
@@ -76,26 +215,14 @@ function SettingsPage() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
-  const addMbox = useMutation({
-    mutationFn: async () => {
-      if (!ws) throw new Error("No workspace");
-      return addBox({ data: { workspace_id: ws.id, ...mbox } });
-    },
-    onSuccess: () => {
-      toast.success("Mailbox added — connect via OAuth from the mailbox row.");
-      qc.invalidateQueries({ queryKey: ["mailboxes"] });
-      setMbox({ provider: "gmail", email: "", display_name: "" });
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
-  });
-
-  const delMbox = useMutation({
-    mutationFn: (id: string) => removeBox({ data: { id } }),
-    onSuccess: () => {
-      toast.success("Mailbox removed");
-      qc.invalidateQueries({ queryKey: ["mailboxes"] });
-    },
-  });
+  const onConnectGmail = async () => {
+    try {
+      const { consentUrl } = await startConnect();
+      window.location.href = consentUrl;
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
 
   return (
     <>
@@ -150,100 +277,43 @@ function SettingsPage() {
           </Card>
 
           {/* Mailboxes */}
-          <Card title="Mailboxes" description="Connect Gmail, Outlook, or SMTP accounts to send outreach from. OAuth verification runs the first time you send.">
+          <Card
+            title="Mailboxes"
+            description="Connect a Gmail account to send campaign emails from your own address. Sign in once with Google — we use the secure Gmail API, no passwords."
+          >
             {mailboxes.length === 0 ? (
               <div className="rounded-md border border-dashed border-border p-6 text-center">
                 <Mail className="mx-auto size-5 text-muted-foreground mb-2" />
-                <div className="text-sm font-medium">No mailboxes connected</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Add one below to start sending campaigns from your domain.
+                <div className="text-sm font-medium">No mailboxes connected yet</div>
+                <p className="text-xs text-muted-foreground mt-1 mb-4">
+                  Connect a Gmail account to start sending campaigns from your own address.
                 </p>
+                <Button size="sm" onClick={onConnectGmail}>
+                  Connect Gmail
+                </Button>
               </div>
             ) : (
-              <div className="border border-border rounded-md overflow-hidden bg-card">
-                {mailboxes.map((m) => (
-                  <div
-                    key={m.id}
-                    className="flex items-center justify-between px-4 py-3 border-b border-border last:border-0"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="size-7 rounded-md bg-muted grid place-items-center shrink-0">
-                        <Mail className="size-3.5 text-muted-foreground" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium truncate">{m.email}</div>
-                        <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-                          {m.provider} · {m.status}
-                        </div>
-                      </div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-8 text-muted-foreground hover:text-destructive"
-                      onClick={() => delMbox.mutate(m.id)}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
+              <>
+                <div className="border border-border rounded-md overflow-hidden bg-card">
+                  {mailboxes.map((m) => (
+                    <MailboxRow key={m.id} m={m} defaultTo={form.sender_email || m.email} />
+                  ))}
+                </div>
+                <div>
+                  <Button size="sm" variant="outline" onClick={onConnectGmail}>
+                    <Mail className="size-3.5 mr-1.5" />
+                    Connect another Gmail
+                  </Button>
+                </div>
+              </>
             )}
-
-            <div className="rounded-md border border-border bg-muted/20 p-4 space-y-3">
-              <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-                Add new mailbox
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-3">
-                <div className="space-y-2">
-                  <Label>Provider</Label>
-                  <Select
-                    value={mbox.provider}
-                    onValueChange={(v) =>
-                      setMbox({ ...mbox, provider: v as typeof mbox.provider })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="gmail">Gmail</SelectItem>
-                      <SelectItem value="outlook">Outlook</SelectItem>
-                      <SelectItem value="smtp">SMTP</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Email address</Label>
-                  <Input
-                    type="email"
-                    value={mbox.email}
-                    onChange={(e) => setMbox({ ...mbox, email: e.target.value })}
-                    placeholder="alex@yourco.com"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Display name (optional)</Label>
-                <Input
-                  value={mbox.display_name}
-                  onChange={(e) => setMbox({ ...mbox, display_name: e.target.value })}
-                  placeholder="Alex Chen"
-                />
-              </div>
-              <Button
-                size="sm"
-                onClick={() => addMbox.mutate()}
-                disabled={!mbox.email || addMbox.isPending}
-              >
-                <Plus className="size-3.5 mr-1.5" />
-                Add mailbox
-              </Button>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                After adding, you'll be prompted to authorize the account the first time you send.
-                Until then, mailboxes show as <span className="font-mono">pending_oauth</span>.
-              </p>
-            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Outlook is on the way. Looking for something else? See{" "}
+              <Link to="/integrations" className="underline">
+                Integrations
+              </Link>{" "}
+              for all email providers.
+            </p>
           </Card>
         </div>
       </div>

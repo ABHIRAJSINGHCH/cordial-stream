@@ -38,6 +38,7 @@ import {
   disconnectIntegration,
   testIntegration,
 } from "@/lib/integrations.functions";
+import { startGmailConnect } from "@/lib/gmail.functions";
 
 export const Route = createFileRoute("/_authenticated/integrations")({
   head: () => ({ meta: [{ title: "Integrations — Kinetic" }] }),
@@ -302,23 +303,14 @@ const PROVIDERS: ProviderDef[] = [
 
 const COMING_SOON: ComingSoon[] = [
   {
-    id: "gmail",
-    name: "Gmail",
-    blurb: "One-click 'Sign in with Google' to send through your Gmail.",
-    category: "Email",
-    Icon: Mail,
-    accent: "bg-red-500/10 text-red-600",
-    reason:
-      "We're switching this from SMTP (which doesn't work reliably) to a one-click Google sign-in. In the meantime, Resend is the easiest way to send email.",
-  },
-  {
     id: "outlook",
     name: "Outlook",
     blurb: "One-click sign-in to send through your Outlook account.",
     category: "Email",
     Icon: Mail,
     accent: "bg-sky-500/10 text-sky-600",
-    reason: "Outlook sign-in is on the way. For now, please use Resend for outbound email.",
+    reason:
+      "Outlook sign-in needs Microsoft developer credentials, which require a paid Microsoft account. We'll enable this once those are available.",
   },
 ];
 
@@ -800,6 +792,60 @@ function ComingSoonCard({ c }: { c: ComingSoon }) {
   );
 }
 
+function GmailCard() {
+  const start = useServerFn(startGmailConnect);
+  const [working, setWorking] = useState(false);
+  const handleConnect = async () => {
+    setWorking(true);
+    try {
+      const { consentUrl, redirectBase } = await start();
+      const here = typeof window !== "undefined" ? window.location.origin : "";
+      if (here && new URL(redirectBase).origin !== here) {
+        toast.info(
+          "Heads up: Google will send you to our stable preview URL after sign-in. You may need to sign in there.",
+        );
+      }
+      window.location.href = consentUrl;
+    } catch (e) {
+      toast.error((e as Error).message);
+      setWorking(false);
+    }
+  };
+  return (
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-sm flex flex-col">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-red-500/10 text-red-600">
+            <Mail className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="font-display font-semibold text-foreground">Gmail</div>
+              <Badge className="bg-primary/10 text-primary border-primary/20 text-[10px] px-1.5 py-0">
+                Recommended
+              </Badge>
+            </div>
+            <div className="text-xs text-muted-foreground">Email · Sign in with Google</div>
+          </div>
+        </div>
+      </div>
+      <p className="mt-3 text-sm text-muted-foreground">
+        Send outreach from your own Gmail address. One sign-in with Google — no API keys, no SMTP
+        passwords. We only ask for permission to send emails on your behalf.
+      </p>
+      <div className="mt-auto pt-4">
+        <Button size="sm" onClick={handleConnect} disabled={working}>
+          {working && <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />}
+          Connect Gmail
+        </Button>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Manage connected mailboxes in <a href="/settings" className="underline">Settings → Mailboxes</a>.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function IntegrationsPage() {
   const fetchList = useServerFn(listIntegrations);
   const qc = useQueryClient();
@@ -849,6 +895,7 @@ function IntegrationsPage() {
             {cat}
           </h2>
           <div className="grid gap-4 md:grid-cols-2">
+            {cat === "Email" && <GmailCard />}
             {defs.map((p) => (
               <ProviderCard
                 key={p.id}
