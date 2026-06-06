@@ -795,6 +795,11 @@ function ComingSoonCard({ c }: { c: ComingSoon }) {
 function GmailCard() {
   const start = useServerFn(startGmailConnect);
   const [working, setWorking] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const PROJECT_ID = "a1011a39-4def-4a30-8e1d-c4182929c272";
+  const devRedirect = `https://project--${PROJECT_ID}-dev.lovable.app/api/public/oauth/google/callback`;
+  const prodRedirect = `https://project--${PROJECT_ID}.lovable.app/api/public/oauth/google/callback`;
+  const scopes = "openid email profile https://www.googleapis.com/auth/gmail.send";
   const handleConnect = async () => {
     setWorking(true);
     try {
@@ -833,15 +838,71 @@ function GmailCard() {
         Send outreach from your own Gmail address. One sign-in with Google — no API keys, no SMTP
         passwords. We only ask for permission to send emails on your behalf.
       </p>
-      <div className="mt-auto pt-4">
+      <div className="mt-auto pt-4 space-y-2">
         <Button size="sm" onClick={handleConnect} disabled={working}>
           {working && <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />}
           Connect Gmail
         </Button>
-        <p className="mt-2 text-[11px] text-muted-foreground">
+        <p className="text-[11px] text-muted-foreground">
           Manage connected mailboxes in <a href="/settings" className="underline">Settings → Mailboxes</a>.
         </p>
+        <button
+          type="button"
+          onClick={() => setShowDiagnostics((s) => !s)}
+          className="text-[11px] text-muted-foreground hover:text-foreground underline"
+        >
+          {showDiagnostics ? "Hide" : "Getting a 403 from Google? Show what to configure"}
+        </button>
+        {showDiagnostics && (
+          <div className="mt-2 p-3 rounded-md bg-muted/40 border border-border text-[11px] space-y-2">
+            <p className="text-muted-foreground">
+              In <strong>Google Cloud Console → APIs & Services → OAuth consent screen</strong>:
+            </p>
+            <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+              <li>Add your Gmail address under <strong>Test users</strong>.</li>
+              <li>
+                Under <strong>Scopes</strong>, make sure these are added:
+                <code className="block mt-1 p-1 bg-background rounded font-mono break-all">{scopes}</code>
+              </li>
+            </ol>
+            <p className="text-muted-foreground mt-2">
+              In <strong>Credentials → OAuth Client ID → Authorized redirect URIs</strong>, add both:
+            </p>
+            <code className="block p-1 bg-background rounded font-mono break-all">{devRedirect}</code>
+            <code className="block p-1 bg-background rounded font-mono break-all">{prodRedirect}</code>
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+function FirecrawlCard() {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-sm flex flex-col">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-orange-500/10 text-orange-600">
+            <Sparkles className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="font-display font-semibold text-foreground">Web Research</div>
+              <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] px-1.5 py-0">
+                Active
+              </Badge>
+            </div>
+            <div className="text-xs text-muted-foreground">Powered by Firecrawl</div>
+          </div>
+        </div>
+      </div>
+      <p className="mt-3 text-sm text-muted-foreground">
+        Powers the autonomous Prospecting Agent. The agent uses this to search the web, scrape
+        company sites, and discover prospects for your campaigns.
+      </p>
+      <p className="mt-2 text-[11px] text-muted-foreground">
+        Already linked — open any campaign and click <strong>"Find prospects with AI"</strong>.
+      </p>
     </div>
   );
 }
@@ -886,6 +947,15 @@ function IntegrationsPage() {
           {MANAGED.map((m) => (
             <ManagedCard key={m.id} m={m} />
           ))}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          AI Research
+        </h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          <FirecrawlCard />
         </div>
       </section>
 

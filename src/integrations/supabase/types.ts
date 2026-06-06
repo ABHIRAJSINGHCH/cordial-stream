@@ -218,7 +218,10 @@ export type Database = {
         Row: {
           company: string | null
           created_at: string
+          discovery_notes: string | null
+          discovery_url: string | null
           email: string | null
+          email_confidence: string | null
           enrichment: Json | null
           enrichment_summary: string | null
           first_name: string | null
@@ -227,6 +230,7 @@ export type Database = {
           last_name: string | null
           linkedin_url: string | null
           location: string | null
+          source: string
           status: Database["public"]["Enums"]["lead_status"]
           tags: string[]
           title: string | null
@@ -237,7 +241,10 @@ export type Database = {
         Insert: {
           company?: string | null
           created_at?: string
+          discovery_notes?: string | null
+          discovery_url?: string | null
           email?: string | null
+          email_confidence?: string | null
           enrichment?: Json | null
           enrichment_summary?: string | null
           first_name?: string | null
@@ -246,6 +253,7 @@ export type Database = {
           last_name?: string | null
           linkedin_url?: string | null
           location?: string | null
+          source?: string
           status?: Database["public"]["Enums"]["lead_status"]
           tags?: string[]
           title?: string | null
@@ -256,7 +264,10 @@ export type Database = {
         Update: {
           company?: string | null
           created_at?: string
+          discovery_notes?: string | null
+          discovery_url?: string | null
           email?: string | null
+          email_confidence?: string | null
           enrichment?: Json | null
           enrichment_summary?: string | null
           first_name?: string | null
@@ -265,6 +276,7 @@ export type Database = {
           last_name?: string | null
           linkedin_url?: string | null
           location?: string | null
+          source?: string
           status?: Database["public"]["Enums"]["lead_status"]
           tags?: string[]
           title?: string | null
@@ -506,6 +518,120 @@ export type Database = {
         }
         Relationships: []
       }
+      prospect_run_events: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          message: string
+          payload: Json | null
+          run_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          message: string
+          payload?: Json | null
+          run_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          message?: string
+          payload?: Json | null
+          run_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospect_run_events_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "prospect_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prospect_run_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prospect_runs: {
+        Row: {
+          approved_count: number
+          brief: Json | null
+          campaign_id: string
+          created_at: string
+          created_by: string | null
+          discovered_count: number
+          error: string | null
+          finished_at: string | null
+          id: string
+          seed_domains: string[]
+          started_at: string | null
+          status: string
+          target_count: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          approved_count?: number
+          brief?: Json | null
+          campaign_id: string
+          created_at?: string
+          created_by?: string | null
+          discovered_count?: number
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          seed_domains?: string[]
+          started_at?: string | null
+          status?: string
+          target_count?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          approved_count?: number
+          brief?: Json | null
+          campaign_id?: string
+          created_at?: string
+          created_by?: string | null
+          discovered_count?: number
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          seed_domains?: string[]
+          started_at?: string | null
+          status?: string
+          target_count?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospect_runs_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prospect_runs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sequence_steps: {
         Row: {
           body_template: string | null
@@ -714,7 +840,13 @@ export type Database = {
         | "completed"
       campaign_status: "draft" | "active" | "paused" | "completed"
       event_type: "open" | "click" | "reply" | "bounce" | "unsubscribe" | "sent"
-      lead_status: "new" | "enriching" | "enriched" | "failed" | "unsubscribed"
+      lead_status:
+        | "new"
+        | "enriching"
+        | "enriched"
+        | "failed"
+        | "unsubscribed"
+        | "prospect"
       message_status:
         | "pending_approval"
         | "approved"
@@ -871,7 +1003,14 @@ export const Constants = {
       ],
       campaign_status: ["draft", "active", "paused", "completed"],
       event_type: ["open", "click", "reply", "bounce", "unsubscribe", "sent"],
-      lead_status: ["new", "enriching", "enriched", "failed", "unsubscribed"],
+      lead_status: [
+        "new",
+        "enriching",
+        "enriched",
+        "failed",
+        "unsubscribed",
+        "prospect",
+      ],
       message_status: [
         "pending_approval",
         "approved",
