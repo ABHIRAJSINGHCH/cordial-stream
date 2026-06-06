@@ -41,7 +41,7 @@ export const startProspectRun = createServerFn({ method: "POST" })
     const { runProspectingWorker } = await import("@/lib/prospecting.worker.server");
     // Fire-and-forget so the response returns quickly. The worker writes events
     // and final status to the DB; the UI polls getProspectRun.
-    runProspectingWorker(run.id).catch((e) => {
+    runProspectingWorker(run.id).catch((e: unknown) => {
       console.error("prospect worker crashed", e);
     });
 
