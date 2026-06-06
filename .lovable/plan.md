@@ -1,51 +1,92 @@
-## Goal
 
-Make **Gmail** a real, working per-user connection (sign in with Google, send test email, send approved campaigns). Leave **Outlook** as "Coming soon" until Microsoft credentials are available.
+## Part 1 — Gmail 403 fix
 
-## Before I start building
+The 403 page comes from Google's consent screen, not from our code. Now that you've added your Gmail address as a Test User:
 
-1. **Rotate the Google client secret** you pasted in chat (Google Cloud Console → Credentials → Reset Secret).
-2. When I switch to build mode I'll open the secure secrets form and ask for:
-   - `GOOGLE_OAUTH_CLIENT_ID`
-   - `GOOGLE_OAUTH_CLIENT_SECRET` (the new, rotated one)
-3. The redirect URI in your Google client must be exactly:
-   `https://project--a1011a39-4def-4a30-8e1d-c4182929c272.lovable.app/api/public/oauth/google/callback`
-   (and the `-dev` variant for previews)
+1. Wait ~1 minute for Google to propagate the change.
+2. In Integrations, click **Connect Gmail** again.
+3. On the Google "choose account" screen, pick the **exact same** email you added as a Test User.
 
-## What I'll build
+If it still 403s, the most common second cause is that the `gmail.send` scope isn't added to the consent screen. I'll add a small **diagnostic banner** on the Integrations page that shows the exact redirect URI and scopes we're requesting, so you can paste them into Google Console verbatim.
 
-### 1. Database (one migration)
-Add columns to `mailboxes` for real OAuth:
-- `provider_account_id`, `access_token_ciphertext`, `access_token_iv`
-- `refresh_token_ciphertext`, `refresh_token_iv`, `token_expires_at`
-- `scopes`, `last_test_at`, `last_test_status`, `last_test_error`
-Add a short-lived `oauth_states` table (state, user_id, workspace_id, provider, expires_at) so the OAuth callback can verify the request came from this app.
+No code change is needed for the OAuth flow itself — it's already correct.
 
-### 2. Server: Gmail OAuth flow
-- `startGmailConnect` server fn → generates a `state`, stores it, returns Google's consent URL (scopes: `openid email profile gmail.send`).
-- Public route `GET /api/public/oauth/google/callback` → exchanges code for tokens, fetches the Gmail address, encrypts and stores tokens in `mailboxes`, marks status `ready`, redirects user back to `/integrations?connected=gmail`.
-- `refreshGmailToken` helper (auto-runs when access token expires).
-- `sendTestEmail({ mailboxId, to })` → sends a real test message via Gmail API; updates `last_test_*`.
-- `sendCampaignMessage({ messageId, mailboxId })` → sends an approved campaign message via Gmail and writes a `message_event`.
-- `disconnectMailbox({ id })`.
+---
 
-### 3. UI changes (frontend only beyond the server fns above)
-- **Integrations page**: Gmail card becomes "Connect Gmail" (opens Google in a new tab). Outlook stays "Coming soon" with a short note.
-- **Settings → Mailboxes**: list connected Gmail accounts with status badge (Ready / Needs sign-in again / Test failed), a "Send test email" button, and "Disconnect".
-- **Campaign approval queue**: after approval, show "Send now" for email messages; picks the workspace's connected Gmail mailbox (or prompts to connect one). Status updates only after Gmail accepts the send.
-- Replace technical wording ("OAuth", "pending_oauth", "credentials") with plain labels.
+## Part 2 — Autonomous Prospecting Agent
 
-### 4. Verification pass I'll run after building
-- Visit `/integrations`, click Connect Gmail, complete Google sign-in, confirm redirect lands back with the mailbox saved as "Ready".
-- Click "Send test email" to your own address → confirm receipt.
-- Approve a campaign message → click "Send now" → confirm Gmail accepts and message status flips to `sent`.
-- Disconnect → reconnect cycle works.
-- Refresh-token path: simulate expiry, confirm the next send refreshes silently.
+### What it does (user-facing)
 
-## What I won't do
-- Touch Outlook beyond keeping the "Coming soon" card.
-- Bring back app passwords or SMTP.
-- Mark anything as sent unless Gmail's API returns success.
-- Store any secret in code or `.env` — only via the secure secrets form.
+On any campaign you open a new **"Find prospects with AI"** panel. You give it:
+- Who you're targeting (industry, role, company size, geography) — already on the campaign as `audience_brief`
+- How many prospects you want (10 / 25 / 50)
+- Optional seed list of company domains, or "find them for me"
 
-Ready for me to switch to build mode and start? I'll begin with the secrets form (after you've rotated the Google secret), then the migration, then the OAuth flow.
+The agent then runs **autonomously in the background**:
+
+1. **Discover companies** — if you didn't give seeds, it searches the web (Firecrawl Search) for companies matching your brief.
+2. **Research each company** — scrapes the company website (about, team, careers, blog, news) via Firecrawl.
+3. **Identify people** — extracts names + titles that match your target role from team/leadership/about pages.
+4. **Guess work emails** — uses standard patterns (`first.last@domain`, `first@domain`, etc.) and marks confidence.
+5. **Write the angle** — for each prospect, AI produces a 1-line "why them" rationale citing the specific signal it found (e.g. "Just raised Series B per their blog post on May 12").
+6. **Generate draft messages** — fills the campaign's sequence steps with personalized drafts using the same approval queue you already have.
+7. **Nothing sends.** Every prospect lands in **Leads** (status: `prospect`) and every message lands in the existing approval queue as `pending_approval`. You review and click Send.
+
+Later, when you flip the app to production, we add an "auto-send" toggle per campaign — same pipeline, just skips the manual approval gate based on rules (confidence > X, daily cap, etc.). The architecture below already supports it.
+
+### Why Firecrawl
+
+It's the lightest, fastest path to "Web + company sites only" — exactly what you picked. It handles JS rendering, gives clean markdown, and supports both search + scrape + structured JSON extraction in one API. We'll link the **Firecrawl connector** so you don't need to paste an API key.
+
+### Technical design
+
+**New tables (migration):**
+- `prospect_runs` — one row per autonomous run: campaign_id, status (`queued`/`running`/`completed`/`failed`), parameters, counts, error, timestamps.
+- `prospect_run_events` — per-step audit log (company discovered, page scraped, person found, message drafted) — drives the live progress UI.
+- Extend `leads` with `source` (`manual` | `ai_prospect`), `discovery_url`, `email_confidence` (`guessed` | `pattern` | `verified`), `discovery_notes` (the AI's rationale).
+
+**New server functions (`src/lib/prospecting.functions.ts`):**
+- `startProspectRun({ campaign_id, target_count, seed_domains? })` — creates the run row, enqueues background work, returns run id.
+- `getProspectRun({ id })` — status + recent events (polled by the UI).
+- `approveProspectLead({ lead_id })` — flips status `prospect` → `new`, adds to the campaign.
+- `discardProspectLead({ lead_id })`.
+
+**Background worker (`src/lib/prospecting.server.ts`):**
+- A single orchestrator function the server route calls after `startProspectRun` returns.
+- Steps: search → scrape → extract entities (via `aiToolCall` to Lovable AI, model `google/gemini-3-flash-preview`) → email-guess → write rationale → insert leads + draft messages.
+- Hard caps: max 50 prospects per run, max 200 Firecrawl calls per run, 60-second per-page scrape timeout. Prevents runaway spend.
+- Writes every step to `prospect_run_events` so the UI shows live progress.
+
+**Server route (`src/routes/api/public/prospecting/tick.ts`):**
+- Internal-only endpoint hit by the server fn to actually run the worker without blocking the response. Signed with `INTERNAL_TICK_SECRET` (new secret I'll request).
+
+**UI changes:**
+- `campaigns.$id.tsx`: new **"Find prospects with AI"** card at the top of the leads section. Opens a sheet with target count + optional seed domains + a live progress feed (event log + counters). When run completes, shows a review table of discovered prospects with their rationale, confidence, and **Approve / Discard** buttons.
+- Approved prospects flow into the existing campaign-leads pipeline and the existing message generation/approval queue you already use today — no new send path.
+- Settings → Integrations: add a small **Firecrawl** card showing connection status.
+
+**Connectors / secrets needed:**
+- **Firecrawl connector** — I'll link it (one-click, no key to paste).
+- `INTERNAL_TICK_SECRET` — auto-generated, never shown to you.
+- Lovable AI is already wired (`LOVABLE_API_KEY`).
+
+### Limits & honesty about what it can/can't do
+
+- **Email accuracy:** "Web only" means we *guess* emails using public patterns. Typical accuracy ~60–75%. Anything we can't pattern-match we mark `low confidence` so you can skip or verify manually. To get real verified emails you'd later add the LinkedIn connector + an enrichment API — that path is already in the design.
+- **Speed:** A 25-prospect run typically takes 2–5 minutes depending on how many pages it scrapes.
+- **Cost:** Each run uses Firecrawl credits (scraping) + Lovable AI credits (extraction + drafting). I'll surface counts after each run so you can watch the burn.
+
+### Verification before I call it done
+
+1. Connect Firecrawl, open a campaign, click **Find prospects with AI** with target count = 5, seed domain = `stripe.com`. Verify it returns at least 1 prospect with rationale + draft message.
+2. Run again with no seeds, brief = "Series B SaaS companies in fintech, target role: VP Engineering". Verify it discovers companies on its own.
+3. Approve one prospect → confirm it appears in the campaign leads list and a draft message is in the approval queue with status `pending_approval`.
+4. Discard one prospect → confirm it's removed.
+5. Hit the per-run cap (set to 3 temporarily) → confirm run stops gracefully.
+
+### What I'll need from you mid-build
+
+- **One click** to approve linking the Firecrawl connector when the prompt appears.
+- **Retry Gmail connect** once after I deploy, so we confirm the 403 is gone.
+
+Nothing else — no API keys, no Google Console edits beyond the Test User you already added.
