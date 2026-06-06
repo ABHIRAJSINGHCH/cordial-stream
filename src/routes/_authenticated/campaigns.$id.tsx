@@ -24,6 +24,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ProspectAgentButton } from "@/components/ProspectAgentButton";
 
 export const Route = createFileRoute("/_authenticated/campaigns/$id")({
   head: () => ({ meta: [{ title: "Campaign — Kinetic OS" }] }),
@@ -77,6 +78,7 @@ function CampaignEditor() {
         </div>
         <div className="flex items-center gap-3">
           <MetricsStrip stats={stats} />
+          <ProspectAgentButton campaignId={id} />
           {ws && <AddLeadsDialog campaignId={id} workspaceId={ws.id} attachedIds={leads.map((l) => l.lead_id)} />}
         </div>
       </header>
