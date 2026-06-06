@@ -36,7 +36,7 @@ async function logEvent(
     workspace_id: workspaceId,
     kind,
     message,
-    payload: payload ?? null,
+    payload: (payload ?? null) as never,
   });
 }
 
